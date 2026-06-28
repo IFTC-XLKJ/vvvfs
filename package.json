@@ -1,0 +1,29 @@
+{
+  "name": "vvvfs",
+  "version": "0.0.5",
+  "description": "一个使用IndexDB实现的虚拟文件系统",
+  "keywords": [
+    "Virtual",
+    "File",
+    "System",
+    "IFTC",
+    "VV",
+    "File",
+    "System",
+    "vfs",
+    "fs"
+  ],
+  "license": "MIT",
+  "author": "IFTC",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node esbuild.config.js"
+  },
+  "dependencies": {
+    "dexie": "^4.3.0",
+    "esbuild": "^0.27.3",
+    "mime": "^4.1.0"
+  }
+}
