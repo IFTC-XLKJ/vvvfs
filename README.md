@@ -68,6 +68,7 @@ const vvvfs = new VVVFS("vvvfs", {
 ```javascript
 (async function () {
     const file = new VVVFS.File("/home/user/Desktop/test.txt");
+    // file.options.throwError = true;
     await file.writeText("Hello World!");
     console.log(await file.readText());
     await file.delete();
@@ -76,6 +77,11 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.0.6
+
+- `VVVFS.File` 类中新增 `dbname` 和 `options` 属性
+- `VVVFS` 新增 `defaultDBName` 属性
 
 ### 0.0.5
 

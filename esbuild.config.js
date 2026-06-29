@@ -1,19 +1,17 @@
 import { build } from 'esbuild';
 import fs from 'fs';
 
-const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-
+/**
+ * 构建库
+ */
 build({
     entryPoints: ['index.ts'],
     bundle: true,
     outfile: 'dist/vvvfs.min.js',
     format: 'iife',
-    define: {
-        'process.env.PACKAGE_VERSION': JSON.stringify(pkg.version),
-    },
     minify: true,
     platform: 'browser',
-    target: ["chrome80", "firefox70", "safari13", "edge80"],
+    target: ["chrome72", "firefox126", "safari14", "edge79", "opera60"],
     logLevel: 'info',
     drop: ['console', 'debugger'],
 }).catch(() => process.exit(1));

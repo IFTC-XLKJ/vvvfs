@@ -25,6 +25,7 @@
                 console.log("搜索文件", await vvvfs.search("/", "t"));
                 console.log("移动文件", await vvvfs.move("/test2.txt", "/test3.txt"));
                 console.log("删除文件", await vvvfs.delete("/test.txt"));
+                const file = new VVVFS.File("test.txt");
             } catch (error) {
                 console.error(error);
             }

@@ -60,13 +60,17 @@ class VVVFSError extends Error {
  */
 class VVVFSFile {
     /**
+     * 数据库名称
+     */
+    private _dbname: string = VVVFS.defaultDBName;
+    /**
      * 文件路径
      */
     private _path: string;
     /**
      * 虚拟文件系统实例
      */
-    private _vvvfs: VVVFS = new VVVFS();
+    private _vvvfs: VVVFS = new VVVFS(this._dbname);
     /**
      * 获取文件路径
      */
@@ -79,6 +83,26 @@ class VVVFSFile {
      */
     set path(path: string) {
         this._path = joinPath(path);
+    }
+    /**
+     * 设置数据库名称
+     * @param dbname 数据库名称
+     */
+    set dbname(dbname: string) {
+        this._dbname = dbname;
+        this._vvvfs = new VVVFS(dbname);
+    }
+    /**
+     * 获取数据库名称
+     */
+    get dbname() {
+        return this._dbname;
+    }
+    set options(options: VVVFSOptions) {
+        this._vvvfs.options = options;
+    }
+    get options() {
+        return this._vvvfs.options;
     }
     /**
      * 构造函数
@@ -196,6 +220,7 @@ class VVVFSFile {
 
 const version = packageJson.version;
 class VVVFS {
+    static defaultDBName = "vvvfs";
     private db: VVVFSDatabase;
     options: VVVFSOptions;
     /**
@@ -212,14 +237,14 @@ class VVVFS {
      * @param options 配置项
      */
     constructor(
-        name = "vvvfs",
+        name?: string,
         options = {
             throwError: false,
         },
     ) {
         this.options = options;
         try {
-            this.db = new Dexie(name) as VVVFSDatabase;
+            this.db = new Dexie(name || VVVFS.defaultDBName) as VVVFSDatabase;
             this.db.version(1).stores({
                 files: "++id, name, path, type, file, [name+path+type]",
             });
