@@ -78,6 +78,10 @@ const vvvfs = new VVVFS("vvvfs", {
 
 ## 更新日志
 
+### 0.0.7
+
+- AI 了优化一下
+
 ### 0.0.6
 
 - `VVVFS.File` 类中新增 `dbname` 和 `options` 属性

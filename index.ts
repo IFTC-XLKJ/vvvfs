@@ -409,22 +409,22 @@ class VVVFS {
      * @param path 文件路径
      */
     async createFile(path: string) {
-        if (await this.exists(path)) {
+        const targetPath = joinPath(path);
+        if (await this.exists(targetPath)) {
             console.warn("文件已存在");
             return true;
         }
         try {
-            const { name, parent } = parsePath(path);
+            const { name, parent } = parsePath(targetPath);
             if (!(await this.exists(parent))) {
                 await this.createDir(parent);
             }
-            // console.log(name, parent);
             await this.db.files.add({
                 name: name,
                 path: parent,
                 type: "file",
                 file: new File([], name, {
-                    type: mime.getType(path) || "application/octet-stream",
+                    type: mime.getType(targetPath) || "application/octet-stream",
                 }),
             });
             return true;
@@ -441,12 +441,13 @@ class VVVFS {
      * @param path 目录路径
      */
     async createDir(path: string) {
-        if (await this.exists(path)) {
+        const targetPath = joinPath(path);
+        if (await this.exists(targetPath)) {
             console.warn("目录已存在");
             return true;
         }
         try {
-            const { name, parent } = parsePath(path);
+            const { name, parent } = parsePath(targetPath);
             if (!(await this.exists(parent))) {
                 if (parent == "/") {
                     await this.db.files.add({
@@ -460,7 +461,6 @@ class VVVFS {
                     await this.createDir(parent);
                 }
             }
-            console.log(name, parent);
             await this.db.files.add({
                 name: name,
                 path: parent,
@@ -482,7 +482,8 @@ class VVVFS {
      */
     async exists(path: string) {
         try {
-            const { name, parent } = parsePath(path);
+            const targetPath = joinPath(path);
+            const { name, parent } = parsePath(targetPath);
             return (
                 (await this.db.files
                     .where({
@@ -505,8 +506,9 @@ class VVVFS {
      */
     async write(path: string, content: Blob) {
         try {
-            if (!(await this.exists(path))) {
-                const success = await this.createFile(path);
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
+                const success = await this.createFile(targetPath);
                 if (!success) {
                     console.warn("创建文件失败");
                     if (this.options.throwError) {
@@ -515,19 +517,17 @@ class VVVFS {
                     return false;
                 }
             }
-            const { name, parent } = parsePath(path);
-            console.log(name, parent);
-            if (await this.isDir(parent + "/" + name)) {
+            if (await this.isDir(targetPath)) {
                 console.warn("路径已存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Write", "路径已存在");
                 }
                 return false;
             }
+            const { name, parent } = parsePath(targetPath);
             const file = new File([content], name, {
-                type: mime.getType(path) || "application/octet-stream",
+                type: mime.getType(targetPath) || "application/octet-stream",
             });
-            console.log(file);
             const fileRecord = await this.db.files.where({ name, path: parent }).first();
             if (fileRecord) {
                 await this.db.files.put({
@@ -593,14 +593,15 @@ class VVVFS {
      */
     async read(path: string) {
         try {
-            if (!(await this.exists(path))) {
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Read", "文件不存在");
                 }
                 return null;
             }
-            const { name, parent } = parsePath(path);
+            const { name, parent } = parsePath(targetPath);
             return (await this.db.files.where({ name, path: parent }).first())?.file;
         } catch (error) {
             console.error("读取文件失败", error);
@@ -668,7 +669,8 @@ class VVVFS {
      */
     async isFile(path: string) {
         try {
-            const { name, parent } = parsePath(path);
+            const targetPath = joinPath(path);
+            const { name, parent } = parsePath(targetPath);
             return (await this.db.files.where({ name, path: parent, type: "file" }).count()) > 0;
         } catch (error) {
             console.error("判断文件类型失败", error);
@@ -684,7 +686,8 @@ class VVVFS {
      */
     async isDir(path: string) {
         try {
-            const { name, parent } = parsePath(path);
+            const targetPath = joinPath(path);
+            const { name, parent } = parsePath(targetPath);
             return (await this.db.files.where({ path: parent, name, type: "dir" }).count()) > 0;
         } catch (error) {
             console.error("判断文件类型失败", error);
@@ -700,8 +703,15 @@ class VVVFS {
      */
     async list(path: string) {
         try {
-            const { name, parent } = parsePath(path);
-            return (await this.db.files.where({ path: parent }).toArray())
+            const targetPath = joinPath(path);
+            if (!(await this.isDir(targetPath))) {
+                console.warn("路径不是目录");
+                if (this.options.throwError) {
+                    throw new VVVFSError("List", "路径不是目录");
+                }
+                return [];
+            }
+            return (await this.db.files.where({ path: targetPath }).toArray())
                 .map((file) => file.name)
                 .filter((item) => item != "");
         } catch (error) {
@@ -719,20 +729,50 @@ class VVVFS {
      */
     async rename(path: string, newName: string) {
         try {
-            if (!(await this.exists(path))) {
+            const sourcePath = joinPath(path);
+            const { name, parent } = parsePath(sourcePath);
+            if (!(await this.exists(sourcePath))) {
                 console.warn("文件不存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Rename", "文件不存在");
                 }
                 return false;
             }
-            const { name, parent } = parsePath(path);
-            const file = await this.db.files.get({ path, name });
-            await this.db.files.put({
+            const newPath = joinPath(parent, newName);
+            if (newPath === sourcePath) {
+                return true;
+            }
+            if (await this.exists(newPath)) {
+                console.warn("目标文件已存在");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Rename", "目标文件已存在");
+                }
+                return false;
+            }
+            const fileRecord = await this.db.files.where({ path: parent, name }).first();
+            if (!fileRecord) {
+                console.warn("文件记录未找到");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Rename", "文件记录未找到");
+                }
+                return false;
+            }
+            if (fileRecord.type === "dir") {
+                const descendants = await this.db.files
+                    .filter(
+                        (file) =>
+                            file.path === sourcePath || file.path.startsWith(sourcePath + "/"),
+                    )
+                    .toArray();
+                for (const descendant of descendants) {
+                    const relativePath = descendant.path.slice(sourcePath.length);
+                    const updatedPath = joinPath(newPath + relativePath);
+                    await this.db.files.update(descendant.id!, { path: updatedPath });
+                }
+            }
+            await this.db.files.update(fileRecord.id!, {
                 name: newName,
                 path: parent,
-                type: "file",
-                file: file!.file,
             });
             return true;
         } catch (e) {
@@ -749,29 +789,30 @@ class VVVFS {
      */
     async delete(path: string) {
         try {
-            if (!(await this.exists(path))) {
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Delete", "文件不存在");
                 }
                 return false;
             }
-            const { name, parent } = parsePath(path);
-            if (await this.isDir(path)) {
-                const files = await this.list(path);
+            const { name, parent } = parsePath(targetPath);
+            if (await this.isDir(targetPath)) {
+                const files = await this.list(targetPath);
                 for (const file of files) {
-                    if (await this.isDir(joinPath(path, file))) {
-                        const fileRecord = await this.db.files
-                            .where({ name, path: parent })
-                            .first();
-                        await this.db.files.delete(fileRecord!.id!);
-                    }
-                    await this.delete(joinPath(parent, file));
+                    await this.delete(joinPath(targetPath, file));
+                }
+                const dirRecord = await this.db.files.where({ name, path: parent, type: "dir" }).first();
+                if (dirRecord) {
+                    await this.db.files.delete(dirRecord.id!);
                 }
                 return true;
             } else {
-                const fileRecord = await this.db.files.where({ name, path: parent }).first();
-                await this.db.files.delete(fileRecord!.id!);
+                const fileRecord = await this.db.files.where({ name, path: parent, type: "file" }).first();
+                if (fileRecord) {
+                    await this.db.files.delete(fileRecord.id!);
+                }
                 return true;
             }
         } catch (e) {
@@ -789,34 +830,51 @@ class VVVFS {
      */
     async move(path: string, newPath: string) {
         try {
-            if (await this.exists(newPath)) {
+            const sourcePath = joinPath(path);
+            const destinationPath = joinPath(newPath);
+            if (await this.exists(destinationPath)) {
                 console.warn("目标文件已存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Move", "目标文件已存在");
                 }
                 return false;
             }
-            if (!(await this.exists(path))) {
+            if (!(await this.exists(sourcePath))) {
                 console.warn("源文件不存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Move", "源文件不存在");
                 }
                 return false;
             }
-            const { name, parent } = parsePath(path);
-            const { name: newName, parent: newParent } = parsePath(newPath);
-            await this.createDir(newParent);
-            if (await this.isDir(path)) {
-                const dirs = await this.list(path);
-                for (const dir of dirs) {
-                    await this.move(path + "/" + dir, newPath + "/" + dir);
+            if (destinationPath.startsWith(sourcePath + "/")) {
+                console.warn("目标路径是源路径的子路径");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Move", "目标路径是源路径的子路径");
                 }
-            } else {
-                const fileRecord = await this.db.files.where({ name, path: parent }).first();
-                await this.db.files.update(fileRecord!.id!, { name: newName, path: newParent });
+                return false;
             }
-            await this.delete(path);
-            return true;
+            const { name, parent } = parsePath(sourcePath);
+            const { name: newName, parent: newParent } = parsePath(destinationPath);
+            if (await this.isDir(sourcePath)) {
+                await this.createDir(destinationPath);
+                const children = await this.list(sourcePath);
+                for (const child of children) {
+                    await this.move(joinPath(sourcePath, child), joinPath(destinationPath, child));
+                }
+                const dirRecord = await this.db.files.where({ name, path: parent, type: "dir" }).first();
+                if (dirRecord) {
+                    await this.db.files.delete(dirRecord.id!);
+                }
+                return true;
+            } else {
+                await this.createDir(newParent);
+                const fileRecord = await this.db.files.where({ name, path: parent, type: "file" }).first();
+                if (fileRecord) {
+                    await this.db.files.update(fileRecord.id!, { name: newName, path: newParent });
+                    return true;
+                }
+                return false;
+            }
         } catch (e) {
             console.error(e);
             if (this.options.throwError) {
@@ -832,33 +890,51 @@ class VVVFS {
      */
     async copy(path: string, newPath: string) {
         try {
-            if (await this.exists(newPath)) {
+            const sourcePath = joinPath(path);
+            const destinationPath = joinPath(newPath);
+            if (await this.exists(destinationPath)) {
                 console.warn("目标文件已存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Copy", "目标文件已存在");
                 }
                 return false;
             }
-            if (!(await this.exists(path))) {
+            if (!(await this.exists(sourcePath))) {
                 console.warn("源文件不存在");
                 if (this.options.throwError) {
                     throw new VVVFSError("Copy", "源文件不存在");
                 }
                 return false;
             }
-            const { name, parent } = parsePath(path);
-            const { name: newName, parent: newParent } = parsePath(newPath);
-            await this.createDir(newParent);
-            if (await this.isDir(path)) {
-                const dirs = await this.list(path);
-                for (const dir of dirs) {
-                    await this.move(path + "/" + dir, newPath + "/" + dir);
+            if (destinationPath.startsWith(sourcePath + "/")) {
+                console.warn("目标路径是源路径的子路径");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Copy", "目标路径是源路径的子路径");
                 }
-            } else {
-                const fileRecord = await this.db.files.where({ name, path: parent }).first();
-                await this.db.files.update(fileRecord!.id!, { name: newName, path: newParent });
+                return false;
             }
-            return true;
+            const { name, parent } = parsePath(sourcePath);
+            const { name: newName, parent: newParent } = parsePath(destinationPath);
+            if (await this.isDir(sourcePath)) {
+                await this.createDir(destinationPath);
+                const children = await this.list(sourcePath);
+                for (const child of children) {
+                    await this.copy(joinPath(sourcePath, child), joinPath(destinationPath, child));
+                }
+                return true;
+            } else {
+                const fileRecord = await this.db.files.where({ name, path: parent, type: "file" }).first();
+                if (fileRecord) {
+                    await this.db.files.add({
+                        name: newName,
+                        path: newParent,
+                        type: fileRecord.type,
+                        file: fileRecord.file,
+                    });
+                    return true;
+                }
+                return false;
+            }
         } catch (e) {
             console.error(e);
             if (this.options.throwError) {
