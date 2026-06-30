@@ -83,7 +83,7 @@ const vvvfs = new VVVFS("vvvfs", {
 
 ### 0.0.8
 
-- 新增 `watch` 方法
+- 新增 `watch` 方法 (该方法属于实验性功能，后期可能会改变)
 
 ### 0.0.7
 
