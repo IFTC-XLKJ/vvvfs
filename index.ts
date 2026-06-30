@@ -216,6 +216,9 @@ class VVVFSFile {
     async search(query: string) {
         return await this._vvvfs.search(this._path, query);
     }
+    async watch(handler: (type: string) => void) {
+        return await this._vvvfs.watch(this._path, handler);
+    }
 }
 
 const version = packageJson.version;
@@ -803,13 +806,17 @@ class VVVFS {
                 for (const file of files) {
                     await this.delete(joinPath(targetPath, file));
                 }
-                const dirRecord = await this.db.files.where({ name, path: parent, type: "dir" }).first();
+                const dirRecord = await this.db.files
+                    .where({ name, path: parent, type: "dir" })
+                    .first();
                 if (dirRecord) {
                     await this.db.files.delete(dirRecord.id!);
                 }
                 return true;
             } else {
-                const fileRecord = await this.db.files.where({ name, path: parent, type: "file" }).first();
+                const fileRecord = await this.db.files
+                    .where({ name, path: parent, type: "file" })
+                    .first();
                 if (fileRecord) {
                     await this.db.files.delete(fileRecord.id!);
                 }
@@ -861,14 +868,18 @@ class VVVFS {
                 for (const child of children) {
                     await this.move(joinPath(sourcePath, child), joinPath(destinationPath, child));
                 }
-                const dirRecord = await this.db.files.where({ name, path: parent, type: "dir" }).first();
+                const dirRecord = await this.db.files
+                    .where({ name, path: parent, type: "dir" })
+                    .first();
                 if (dirRecord) {
                     await this.db.files.delete(dirRecord.id!);
                 }
                 return true;
             } else {
                 await this.createDir(newParent);
-                const fileRecord = await this.db.files.where({ name, path: parent, type: "file" }).first();
+                const fileRecord = await this.db.files
+                    .where({ name, path: parent, type: "file" })
+                    .first();
                 if (fileRecord) {
                     await this.db.files.update(fileRecord.id!, { name: newName, path: newParent });
                     return true;
@@ -923,7 +934,9 @@ class VVVFS {
                 }
                 return true;
             } else {
-                const fileRecord = await this.db.files.where({ name, path: parent, type: "file" }).first();
+                const fileRecord = await this.db.files
+                    .where({ name, path: parent, type: "file" })
+                    .first();
                 if (fileRecord) {
                     await this.db.files.add({
                         name: newName,
@@ -992,6 +1005,63 @@ class VVVFS {
             }
             return null;
         }
+    }
+    async watch(path: string, handler: (type: string) => void) {
+        const targetPath = joinPath(path);
+
+        const getState = async () => {
+            const exists = await this.exists(targetPath);
+            if (!exists) {
+                return { exists: false, signature: "" };
+            }
+            if (await this.isDir(targetPath)) {
+                const records = await this.db.files
+                    .filter(
+                        (file) =>
+                            file.path === targetPath || file.path.startsWith(targetPath + "/"),
+                    )
+                    .toArray();
+                const signature = records
+                    .map((file) => {
+                        const fullPath = joinPath(file.path, file.name);
+                        const fileInfo = file.file
+                            ? `${file.file.type}:${file.file.size}:${file.file.lastModified}`
+                            : "null";
+                        return `${fullPath}:${file.type}:${fileInfo}`;
+                    })
+                    .sort()
+                    .join("|");
+                return { exists: true, signature };
+            }
+            const { name, parent } = parsePath(targetPath);
+            const record = await this.db.files.where({ name, path: parent, type: "file" }).first();
+            const signature = record?.file
+                ? `${record.file.type}:${record.file.size}:${record.file.lastModified}`
+                : "";
+            return { exists: true, signature };
+        };
+
+        let previousState = await getState();
+        setInterval(async () => {
+            try {
+                const currentState = await getState();
+                if (
+                    previousState.exists !== currentState.exists ||
+                    previousState.signature !== currentState.signature
+                ) {
+                    if (!previousState.exists && currentState.exists) {
+                        handler("create");
+                    } else if (previousState.exists && !currentState.exists) {
+                        handler("unlink");
+                    } else {
+                        handler("change");
+                    }
+                    previousState = currentState;
+                }
+            } catch (error) {
+                console.error("监听失败", error);
+            }
+        });
     }
 }
 function parsePath(path: string) {

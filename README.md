@@ -42,6 +42,9 @@ const vvvfs = new VVVFS("vvvfs", {
 (async function () {
     await vvvfs.reset(); // 重置文件系统
     await vvvfs.init("UserName"); // 初始化文件系统
+    await vvvfs.watch("/home/user/Desktop/test.txt", (type) => {
+        console.log(type); // 打印文件操作的类型
+    });
     await vvvfs.createDir("/home/user/Desktop"); // 创建目录，返回true和false
     await vvvfs.writeText("/home/user/Desktop/test.txt", "Hello World!"); // 写入文本文件，写入文件还包括write(path: string, content: Blob)和writeJson(path: string, content: Record<string, any>)方法，返回true和false
     console.log(await vvvfs.readText("/home/user/Desktop/test.txt")); // 读取文本文件，读取文件还包括read(path: string): Blob | null和readJson(path: string): Record<string, any> | null方法
@@ -77,6 +80,10 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.0.8
+
+- 新增 `watch` 方法
 
 ### 0.0.7
 

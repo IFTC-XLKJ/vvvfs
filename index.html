@@ -16,6 +16,9 @@
                 await vvvfs.reset();
                 await vvvfs.init("IFTC");
                 console.log(vvvfs);
+                await vvvfs.watch("/test.txt", (type) => {
+                    console.log(type);
+                });
                 console.log("创建文件", await vvvfs.createFile("/test.txt"));
                 console.log("写入文件", await vvvfs.writeText("/test.txt", "Hello World"));
                 console.log("文件是否存在", await vvvfs.exists("/test.txt"));
