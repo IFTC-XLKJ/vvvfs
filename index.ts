@@ -389,6 +389,7 @@ class VVVFS {
         ];
         try {
             for (const file of linuxInitFiles) {
+                if (await this.exists(file.path)) continue;
                 await this.db.files.put(file);
             }
         } catch (error) {
