@@ -1,6 +1,6 @@
 {
   "name": "vvvfs",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "一个使用IndexDB实现的虚拟文件系统",
   "keywords": [
     "Virtual",

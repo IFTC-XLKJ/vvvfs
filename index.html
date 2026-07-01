@@ -13,11 +13,13 @@
         (async () => {
             try {
                 globalThis.vvvfs = new VVVFS();
+                vvvfs.options.throwError = true;
                 await vvvfs.reset();
                 await vvvfs.init("IFTC");
                 console.log(vvvfs);
                 await vvvfs.watch("/test.txt", (type) => {
                     console.log(type);
+                    // return true;
                 });
                 console.log("创建文件", await vvvfs.createFile("/test.txt"));
                 console.log("写入文件", await vvvfs.writeText("/test.txt", "Hello World"));

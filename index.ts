@@ -216,7 +216,7 @@ class VVVFSFile {
     async search(query: string) {
         return await this._vvvfs.search(this._path, query);
     }
-    async watch(handler: (type: string) => void) {
+    async watch(handler: (type: string) => Promise<boolean>) {
         return await this._vvvfs.watch(this._path, handler);
     }
 }
@@ -234,6 +234,10 @@ class VVVFS {
      * 虚拟文件系统文件类
      */
     static File = VVVFSFile;
+    /**
+     * 虚拟文件系统监听器
+     */
+    watchers: Record<string, Array<(type: string) => Promise<boolean>>> = {};
     /**
      * 创建虚拟文件系统
      * @param name 虚拟文件系统名称
@@ -413,11 +417,21 @@ class VVVFS {
      */
     async createFile(path: string) {
         const targetPath = joinPath(path);
-        if (await this.exists(targetPath)) {
-            console.warn("文件已存在");
-            return true;
-        }
         try {
+            if (this.watchers[targetPath]) {
+                for (const handler of this.watchers[targetPath]) {
+                    if (await handler("create")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("CreateFile", "创建文件失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
+            if (await this.exists(targetPath)) {
+                console.warn("文件已存在");
+                return true;
+            }
             const { name, parent } = parsePath(targetPath);
             if (!(await this.exists(parent))) {
                 await this.createDir(parent);
@@ -445,11 +459,21 @@ class VVVFS {
      */
     async createDir(path: string) {
         const targetPath = joinPath(path);
-        if (await this.exists(targetPath)) {
-            console.warn("目录已存在");
-            return true;
-        }
         try {
+            if (this.watchers[targetPath]) {
+                for (const handler of this.watchers[targetPath]) {
+                    if (await handler("create")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("CreateDir", "创建目录失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
+            if (await this.exists(targetPath)) {
+                console.warn("目录已存在");
+                return true;
+            }
             const { name, parent } = parsePath(targetPath);
             if (!(await this.exists(parent))) {
                 if (parent == "/") {
@@ -510,6 +534,16 @@ class VVVFS {
     async write(path: string, content: Blob) {
         try {
             const targetPath = joinPath(path);
+            if (this.watchers[targetPath]) {
+                for (const handler of this.watchers[targetPath]) {
+                    if (await handler("write")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Write", "写入文件失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
             if (!(await this.exists(targetPath))) {
                 const success = await this.createFile(targetPath);
                 if (!success) {
@@ -597,6 +631,16 @@ class VVVFS {
     async read(path: string) {
         try {
             const targetPath = joinPath(path);
+            if (this.watchers[targetPath]) {
+                for (const handler of this.watchers[targetPath]) {
+                    if (await handler("read")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Read", "读取文件失败：监听器取消了操作");
+                        }
+                        return null;
+                    }
+                }
+            }
             if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
                 if (this.options.throwError) {
@@ -707,6 +751,23 @@ class VVVFS {
     async list(path: string) {
         try {
             const targetPath = joinPath(path);
+            if (this.watchers[targetPath]) {
+                for (const handler of this.watchers[targetPath]) {
+                    if (await handler("list")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("List", "列出目录下的文件失败：监听器取消了操作");
+                        }
+                        return [];
+                    }
+                }
+            }
+            if (!(await this.exists(targetPath))) {
+                console.warn("路径不存在");
+                if (this.options.throwError) {
+                    throw new VVVFSError("List", "路径不存在");
+                }
+                return [];
+            }
             if (!(await this.isDir(targetPath))) {
                 console.warn("路径不是目录");
                 if (this.options.throwError) {
@@ -734,6 +795,16 @@ class VVVFS {
         try {
             const sourcePath = joinPath(path);
             const { name, parent } = parsePath(sourcePath);
+            if (this.watchers[sourcePath]) {
+                for (const handler of this.watchers[sourcePath]) {
+                    if (await handler("rename")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Rename", "重命名文件失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
             if (!(await this.exists(sourcePath))) {
                 console.warn("文件不存在");
                 if (this.options.throwError) {
@@ -793,6 +864,16 @@ class VVVFS {
     async delete(path: string) {
         try {
             const targetPath = joinPath(path);
+            if (this.watchers[targetPath]) {
+                for (const handler of this.watchers[targetPath]) {
+                    if (await handler("delete")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Delete", "删除文件失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
             if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
                 if (this.options.throwError) {
@@ -839,6 +920,19 @@ class VVVFS {
         try {
             const sourcePath = joinPath(path);
             const destinationPath = joinPath(newPath);
+            if (this.watchers[sourcePath]) {
+                for (const handler of this.watchers[sourcePath]) {
+                    if (await handler("move")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Move", "移动文件失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
+            if (sourcePath === destinationPath) {
+                return true;
+            }
             if (await this.exists(destinationPath)) {
                 console.warn("目标文件已存在");
                 if (this.options.throwError) {
@@ -903,6 +997,16 @@ class VVVFS {
         try {
             const sourcePath = joinPath(path);
             const destinationPath = joinPath(newPath);
+            if (this.watchers[sourcePath]) {
+                for (const handler of this.watchers[sourcePath]) {
+                    if (await handler("copy")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Copy", "复制文件失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
             if (await this.exists(destinationPath)) {
                 console.warn("目标文件已存在");
                 if (this.options.throwError) {
@@ -1006,62 +1110,12 @@ class VVVFS {
             return null;
         }
     }
-    async watch(path: string, handler: (type: string) => void) {
-        const targetPath = joinPath(path);
-
-        const getState = async () => {
-            const exists = await this.exists(targetPath);
-            if (!exists) {
-                return { exists: false, signature: "" };
-            }
-            if (await this.isDir(targetPath)) {
-                const records = await this.db.files
-                    .filter(
-                        (file) =>
-                            file.path === targetPath || file.path.startsWith(targetPath + "/"),
-                    )
-                    .toArray();
-                const signature = records
-                    .map((file) => {
-                        const fullPath = joinPath(file.path, file.name);
-                        const fileInfo = file.file
-                            ? `${file.file.type}:${file.file.size}:${file.file.lastModified}`
-                            : "null";
-                        return `${fullPath}:${file.type}:${fileInfo}`;
-                    })
-                    .sort()
-                    .join("|");
-                return { exists: true, signature };
-            }
-            const { name, parent } = parsePath(targetPath);
-            const record = await this.db.files.where({ name, path: parent, type: "file" }).first();
-            const signature = record?.file
-                ? `${record.file.type}:${record.file.size}:${record.file.lastModified}`
-                : "";
-            return { exists: true, signature };
-        };
-
-        let previousState = await getState();
-        setInterval(async () => {
-            try {
-                const currentState = await getState();
-                if (
-                    previousState.exists !== currentState.exists ||
-                    previousState.signature !== currentState.signature
-                ) {
-                    if (!previousState.exists && currentState.exists) {
-                        handler("create");
-                    } else if (previousState.exists && !currentState.exists) {
-                        handler("unlink");
-                    } else {
-                        handler("change");
-                    }
-                    previousState = currentState;
-                }
-            } catch (error) {
-                console.error("监听失败", error);
-            }
-        });
+    async watch(path: string, handler: (type: string) => Promise<boolean>) {
+        path = joinPath(path);
+        if (!this.watchers[path]) {
+            this.watchers[path] = [];
+        }
+        this.watchers[path].push(handler);
     }
 }
 function parsePath(path: string) {
