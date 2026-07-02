@@ -50,6 +50,7 @@ const vvvfs = new VVVFS("vvvfs", {
     await vvvfs.writeText("/home/user/Desktop/test.txt", "Hello World!"); // 写入文本文件，写入文件还包括write(path: string, content: Blob)和writeJson(path: string, content: Record<string, any>)方法，返回true和false
     await vvvfs.appendText("/home/user/Desktop/test.txt", "Hello World!"); // 追加文本文件，返回true和false
     console.log(await vvvfs.readText("/home/user/Desktop/test.txt")); // 读取文本文件，读取文件还包括read(path: string): Blob | null和readJson(path: string): Record<string, any> | null方法
+    console.log(await vvvfs.readChunkText("/home/user/Desktop/test.txt", 0, 5)); // 读取文件块，返回string | null
     await vvvfs.delete("/home/user/Desktop/test.txt"); // 删除文件，返回true和false
     if (await vvvfs.exists("/home/user/Desktop")) {
         // 判断文件或目录是否存在
@@ -82,6 +83,10 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.1.2
+
+- 新增 `readChunk` 和 `readChunkText` 方法，用于读取文件块
 
 ### 0.1.1
 

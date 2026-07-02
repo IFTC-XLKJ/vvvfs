@@ -130,6 +130,22 @@ class VVVFSFile {
         return await this._vvvfs.readJson(this._path);
     }
     /**
+     * 读取文件内容
+     * @param start 起始位置
+     * @param end 结束位置
+     */
+    async readChunk(start: number, end: number) {
+        return await this._vvvfs.readChunk(this._path, start, end);
+    }
+    /**
+     * 读取文件内容
+     * @param start 起始位置
+     * @param end 结束位置
+     */
+    async readTextChunk(start: number, end: number) {
+        return await this._vvvfs.readTextChunk(this._path, start, end);
+    }
+    /**
      * 写入文件
      * @param file 文件对象
      */
@@ -238,7 +254,7 @@ class VVVFSFile {
 const version = packageJson.version;
 class VVVFS {
     static defaultDBName = "vvvfs";
-    private db: VVVFSDatabase;
+    #db: VVVFSDatabase;
     options: VVVFSOptions;
     /**
      * 虚拟文件系统版本
@@ -251,7 +267,7 @@ class VVVFS {
     /**
      * 虚拟文件系统监听器
      */
-    watchers: Record<string, Array<(type: string) => Promise<boolean>>> = {};
+    #watchers: Record<string, Array<(type: string) => Promise<boolean>>> = {};
     /**
      * 创建虚拟文件系统
      * @param name 虚拟文件系统名称
@@ -265,8 +281,8 @@ class VVVFS {
     ) {
         this.options = options;
         try {
-            this.db = new Dexie(name || VVVFS.defaultDBName) as VVVFSDatabase;
-            this.db.version(1).stores({
+            this.#db = new Dexie(name || VVVFS.defaultDBName) as VVVFSDatabase;
+            this.#db.version(1).stores({
                 files: "++id, name, path, type, file, [name+path+type]",
             });
         } catch (error) {
@@ -404,7 +420,7 @@ class VVVFS {
         try {
             for (const file of linuxInitFiles) {
                 if (await this.exists(file.path)) continue;
-                await this.db.files.put(file);
+                await this.#db.files.put(file);
             }
         } catch (error) {
             console.error("初始化文件失败", error);
@@ -416,9 +432,9 @@ class VVVFS {
      */
     async reset() {
         try {
-            await this.db.delete();
-            this.db = new Dexie(this.db.name) as VVVFSDatabase;
-            this.db.version(1).stores({
+            await this.#db.delete();
+            this.#db = new Dexie(this.#db.name) as VVVFSDatabase;
+            this.#db.version(1).stores({
                 files: "++id, name, path, type, file, [name+path+type]",
             });
         } catch (error) {
@@ -433,8 +449,8 @@ class VVVFS {
     async createFile(path: string) {
         const targetPath = joinPath(path);
         try {
-            if (this.watchers[targetPath]) {
-                for (const handler of this.watchers[targetPath]) {
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
                     if (await handler("create")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("CreateFile", "创建文件失败：监听器取消了操作");
@@ -451,7 +467,7 @@ class VVVFS {
             if (!(await this.exists(parent))) {
                 await this.createDir(parent);
             }
-            await this.db.files.add({
+            await this.#db.files.add({
                 name: name,
                 path: parent,
                 type: "file",
@@ -475,8 +491,8 @@ class VVVFS {
     async createDir(path: string) {
         const targetPath = joinPath(path);
         try {
-            if (this.watchers[targetPath]) {
-                for (const handler of this.watchers[targetPath]) {
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
                     if (await handler("create")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("CreateDir", "创建目录失败：监听器取消了操作");
@@ -492,7 +508,7 @@ class VVVFS {
             const { name, parent } = parsePath(targetPath);
             if (!(await this.exists(parent))) {
                 if (parent == "/") {
-                    await this.db.files.add({
+                    await this.#db.files.add({
                         name: "",
                         path: "/",
                         type: "dir",
@@ -503,7 +519,7 @@ class VVVFS {
                     await this.createDir(parent);
                 }
             }
-            await this.db.files.add({
+            await this.#db.files.add({
                 name: name,
                 path: parent,
                 type: "dir",
@@ -527,7 +543,7 @@ class VVVFS {
             const targetPath = joinPath(path);
             const { name, parent } = parsePath(targetPath);
             return (
-                (await this.db.files
+                (await this.#db.files
                     .where({
                         name: name,
                         path: parent,
@@ -549,8 +565,8 @@ class VVVFS {
     async write(path: string, content: Blob) {
         try {
             const targetPath = joinPath(path);
-            if (this.watchers[targetPath]) {
-                for (const handler of this.watchers[targetPath]) {
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
                     if (await handler("write")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("Write", "写入文件失败：监听器取消了操作");
@@ -580,9 +596,9 @@ class VVVFS {
             const file = new File([content], name, {
                 type: mime.getType(targetPath) || "application/octet-stream",
             });
-            const fileRecord = await this.db.files.where({ name, path: parent }).first();
+            const fileRecord = await this.#db.files.where({ name, path: parent }).first();
             if (fileRecord) {
-                await this.db.files.put({
+                await this.#db.files.put({
                     ...fileRecord,
                     file: file,
                 });
@@ -647,8 +663,8 @@ class VVVFS {
     async append(path: string, content: Blob) {
         try {
             const targetPath = joinPath(path);
-            if (this.watchers[targetPath]) {
-                for (const handler of this.watchers[targetPath]) {
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
                     if (await handler("append")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("Append", "追加文件失败：监听器取消了操作");
@@ -698,8 +714,8 @@ class VVVFS {
     async read(path: string) {
         try {
             const targetPath = joinPath(path);
-            if (this.watchers[targetPath]) {
-                for (const handler of this.watchers[targetPath]) {
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
                     if (await handler("read")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("Read", "读取文件失败：监听器取消了操作");
@@ -716,7 +732,7 @@ class VVVFS {
                 return null;
             }
             const { name, parent } = parsePath(targetPath);
-            return (await this.db.files.where({ name, path: parent }).first())?.file;
+            return (await this.#db.files.where({ name, path: parent }).first())?.file;
         } catch (error) {
             console.error("读取文件失败", error);
             if (this.options.throwError) {
@@ -778,6 +794,63 @@ class VVVFS {
         }
     }
     /**
+     * 读取文件内容
+     * @param path 文件路径
+     * @param start 开始位置
+     * @param end 结束位置
+     */
+    async readChunk(path: string, start: number, end: number) {
+        try {
+            const targetPath = joinPath(path);
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
+                    if (await handler("read")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Read", "读取文件失败：监听器取消了操作");
+                        }
+                        return null;
+                    }
+                }
+            }
+            if (!(await this.exists(targetPath))) {
+                console.warn("文件不存在");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Read", "文件不存在");
+                }
+                return null;
+            }
+            const file = await this.read(targetPath);
+            return file?.slice(start, end) || null;
+        } catch (error) {
+            console.error("读取文件失败", error);
+            if (this.options.throwError) {
+                throw new VVVFSError("Read", "读取文件失败" + error);
+            }
+            return null;
+        }
+    }
+    /**
+     * 读取文件内容
+     * @param path 文件路径
+     * @param start 读取开始位置
+     * @param end 读取结束位置
+     */
+    async readTextChunk(path: string, start: number, end: number) {
+        try {
+            const chunk = await this.readChunk(path, start, end);
+            if (chunk) {
+                return await chunk.text();
+            } else {
+                return null;
+            }
+        } catch (error) {
+            console.error("读取文件失败", error);
+            if (this.options.throwError) {
+                throw new VVVFSError("Read", "读取文件失败" + error);
+            }
+        }
+    }
+    /**
      * 判断是否是文件
      * @param path 文件路径
      */
@@ -785,7 +858,7 @@ class VVVFS {
         try {
             const targetPath = joinPath(path);
             const { name, parent } = parsePath(targetPath);
-            return (await this.db.files.where({ name, path: parent, type: "file" }).count()) > 0;
+            return (await this.#db.files.where({ name, path: parent, type: "file" }).count()) > 0;
         } catch (error) {
             console.error("判断文件类型失败", error);
             if (this.options.throwError) {
@@ -802,7 +875,7 @@ class VVVFS {
         try {
             const targetPath = joinPath(path);
             const { name, parent } = parsePath(targetPath);
-            return (await this.db.files.where({ path: parent, name, type: "dir" }).count()) > 0;
+            return (await this.#db.files.where({ path: parent, name, type: "dir" }).count()) > 0;
         } catch (error) {
             console.error("判断文件类型失败", error);
             if (this.options.throwError) {
@@ -818,8 +891,8 @@ class VVVFS {
     async list(path: string) {
         try {
             const targetPath = joinPath(path);
-            if (this.watchers[targetPath]) {
-                for (const handler of this.watchers[targetPath]) {
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
                     if (await handler("list")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("List", "列出目录下的文件失败：监听器取消了操作");
@@ -842,7 +915,7 @@ class VVVFS {
                 }
                 return [];
             }
-            return (await this.db.files.where({ path: targetPath }).toArray())
+            return (await this.#db.files.where({ path: targetPath }).toArray())
                 .map((file) => file.name)
                 .filter((item) => item != "");
         } catch (error) {
@@ -862,8 +935,8 @@ class VVVFS {
         try {
             const sourcePath = joinPath(path);
             const { name, parent } = parsePath(sourcePath);
-            if (this.watchers[sourcePath]) {
-                for (const handler of this.watchers[sourcePath]) {
+            if (this.#watchers[sourcePath]) {
+                for (const handler of this.#watchers[sourcePath]) {
                     if (await handler("rename")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("Rename", "重命名文件失败：监听器取消了操作");
@@ -890,7 +963,7 @@ class VVVFS {
                 }
                 return false;
             }
-            const fileRecord = await this.db.files.where({ path: parent, name }).first();
+            const fileRecord = await this.#db.files.where({ path: parent, name }).first();
             if (!fileRecord) {
                 console.warn("文件记录未找到");
                 if (this.options.throwError) {
@@ -899,7 +972,7 @@ class VVVFS {
                 return false;
             }
             if (fileRecord.type === "dir") {
-                const descendants = await this.db.files
+                const descendants = await this.#db.files
                     .filter(
                         (file) =>
                             file.path === sourcePath || file.path.startsWith(sourcePath + "/"),
@@ -908,10 +981,10 @@ class VVVFS {
                 for (const descendant of descendants) {
                     const relativePath = descendant.path.slice(sourcePath.length);
                     const updatedPath = joinPath(newPath + relativePath);
-                    await this.db.files.update(descendant.id!, { path: updatedPath });
+                    await this.#db.files.update(descendant.id!, { path: updatedPath });
                 }
             }
-            await this.db.files.update(fileRecord.id!, {
+            await this.#db.files.update(fileRecord.id!, {
                 name: newName,
                 path: parent,
             });
@@ -931,8 +1004,8 @@ class VVVFS {
     async delete(path: string) {
         try {
             const targetPath = joinPath(path);
-            if (this.watchers[targetPath]) {
-                for (const handler of this.watchers[targetPath]) {
+            if (this.#watchers[targetPath]) {
+                for (const handler of this.#watchers[targetPath]) {
                     if (await handler("delete")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("Delete", "删除文件失败：监听器取消了操作");
@@ -954,19 +1027,19 @@ class VVVFS {
                 for (const file of files) {
                     await this.delete(joinPath(targetPath, file));
                 }
-                const dirRecord = await this.db.files
+                const dirRecord = await this.#db.files
                     .where({ name, path: parent, type: "dir" })
                     .first();
                 if (dirRecord) {
-                    await this.db.files.delete(dirRecord.id!);
+                    await this.#db.files.delete(dirRecord.id!);
                 }
                 return true;
             } else {
-                const fileRecord = await this.db.files
+                const fileRecord = await this.#db.files
                     .where({ name, path: parent, type: "file" })
                     .first();
                 if (fileRecord) {
-                    await this.db.files.delete(fileRecord.id!);
+                    await this.#db.files.delete(fileRecord.id!);
                 }
                 return true;
             }
@@ -987,8 +1060,8 @@ class VVVFS {
         try {
             const sourcePath = joinPath(path);
             const destinationPath = joinPath(newPath);
-            if (this.watchers[sourcePath]) {
-                for (const handler of this.watchers[sourcePath]) {
+            if (this.#watchers[sourcePath]) {
+                for (const handler of this.#watchers[sourcePath]) {
                     if (await handler("move")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("Move", "移动文件失败：监听器取消了操作");
@@ -1029,20 +1102,20 @@ class VVVFS {
                 for (const child of children) {
                     await this.move(joinPath(sourcePath, child), joinPath(destinationPath, child));
                 }
-                const dirRecord = await this.db.files
+                const dirRecord = await this.#db.files
                     .where({ name, path: parent, type: "dir" })
                     .first();
                 if (dirRecord) {
-                    await this.db.files.delete(dirRecord.id!);
+                    await this.#db.files.delete(dirRecord.id!);
                 }
                 return true;
             } else {
                 await this.createDir(newParent);
-                const fileRecord = await this.db.files
+                const fileRecord = await this.#db.files
                     .where({ name, path: parent, type: "file" })
                     .first();
                 if (fileRecord) {
-                    await this.db.files.update(fileRecord.id!, { name: newName, path: newParent });
+                    await this.#db.files.update(fileRecord.id!, { name: newName, path: newParent });
                     return true;
                 }
                 return false;
@@ -1064,8 +1137,8 @@ class VVVFS {
         try {
             const sourcePath = joinPath(path);
             const destinationPath = joinPath(newPath);
-            if (this.watchers[sourcePath]) {
-                for (const handler of this.watchers[sourcePath]) {
+            if (this.#watchers[sourcePath]) {
+                for (const handler of this.#watchers[sourcePath]) {
                     if (await handler("copy")) {
                         if (this.options.throwError) {
                             throw new VVVFSError("Copy", "复制文件失败：监听器取消了操作");
@@ -1105,11 +1178,11 @@ class VVVFS {
                 }
                 return true;
             } else {
-                const fileRecord = await this.db.files
+                const fileRecord = await this.#db.files
                     .where({ name, path: parent, type: "file" })
                     .first();
                 if (fileRecord) {
-                    await this.db.files.add({
+                    await this.#db.files.add({
                         name: newName,
                         path: newParent,
                         type: fileRecord.type,
@@ -1179,10 +1252,10 @@ class VVVFS {
     }
     async watch(path: string, handler: (type: string) => Promise<boolean>) {
         path = joinPath(path);
-        if (!this.watchers[path]) {
-            this.watchers[path] = [];
+        if (!this.#watchers[path]) {
+            this.#watchers[path] = [];
         }
-        this.watchers[path].push(handler);
+        this.#watchers[path].push(handler);
     }
 }
 function parsePath(path: string) {
