@@ -48,6 +48,7 @@ const vvvfs = new VVVFS("vvvfs", {
     });
     await vvvfs.createDir("/home/user/Desktop"); // 创建目录，返回true和false
     await vvvfs.writeText("/home/user/Desktop/test.txt", "Hello World!"); // 写入文本文件，写入文件还包括write(path: string, content: Blob)和writeJson(path: string, content: Record<string, any>)方法，返回true和false
+    await vvvfs.appendText("/home/user/Desktop/test.txt", "Hello World!"); // 追加文本文件，返回true和false
     console.log(await vvvfs.readText("/home/user/Desktop/test.txt")); // 读取文本文件，读取文件还包括read(path: string): Blob | null和readJson(path: string): Record<string, any> | null方法
     await vvvfs.delete("/home/user/Desktop/test.txt"); // 删除文件，返回true和false
     if (await vvvfs.exists("/home/user/Desktop")) {
@@ -81,6 +82,10 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.1.1
+
+- 新增 `append` 和 `appendText` 方法，用于追加内容
 
 ### 0.1.0
 

@@ -23,6 +23,7 @@
                 });
                 console.log("创建文件", await vvvfs.createFile("/test.txt"));
                 console.log("写入文件", await vvvfs.writeText("/test.txt", "Hello World"));
+                console.log("追加文件", await vvvfs.appendText("/test.txt", " - Appended"));
                 console.log("文件是否存在", await vvvfs.exists("/test.txt"));
                 console.log("文件是否存在", await vvvfs.exists("/test2.txt"));
                 console.log("读取文件", await vvvfs.readText("/test.txt"));

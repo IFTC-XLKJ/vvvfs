@@ -151,6 +151,20 @@ class VVVFSFile {
         return await this._vvvfs.writeJson(this._path, json, format);
     }
     /**
+     * 追加文件内容
+     * @param file 文件对象
+     */
+    async append(file: Blob) {
+        return await this._vvvfs.append(this._path, file);
+    }
+    /**
+     * 追加文件文本内容
+     * @param text 文件文本内容
+     */
+    async appendText(text: string) {
+        return await this._vvvfs.appendText(this._path, text);
+    }
+    /**
      * 创建文件
      */
     async createFile() {
@@ -621,6 +635,58 @@ class VVVFS {
             console.error("写入文件失败", error);
             if (this.options.throwError) {
                 throw new VVVFSError("Write", "写入文件失败" + error);
+            }
+            return false;
+        }
+    }
+    /**
+     * 追加内容
+     * @param path 文件路径
+     * @param content 追加内容
+     */
+    async append(path: string, content: Blob) {
+        try {
+            const targetPath = joinPath(path);
+            if (this.watchers[targetPath]) {
+                for (const handler of this.watchers[targetPath]) {
+                    if (await handler("append")) {
+                        if (this.options.throwError) {
+                            throw new VVVFSError("Append", "追加文件失败：监听器取消了操作");
+                        }
+                        return false;
+                    }
+                }
+            }
+            const existingFile = await this.read(targetPath);
+            if (existingFile) {
+                const blob = new Blob([existingFile, content], {
+                    type: "application/octet-stream",
+                });
+                return await this.write(targetPath, blob);
+            } else {
+                return await this.write(targetPath, content);
+            }
+        } catch (error) {
+            console.error("追加文件失败", error);
+            if (this.options.throwError) {
+                throw new VVVFSError("Append", "追加文件失败" + error);
+            }
+            return false;
+        }
+    }
+    /**
+     * 追加文本内容
+     * @param path 文件路径
+     * @param content 追加内容
+     */
+    async appendText(path: string, content: string) {
+        try {
+            const blob = new Blob([content], { type: "text/plain" });
+            return await this.append(path, blob);
+        } catch (error) {
+            console.error("追加文件失败", error);
+            if (this.options.throwError) {
+                throw new VVVFSError("Append", "追加文件失败" + error);
             }
             return false;
         }
