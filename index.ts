@@ -246,8 +246,23 @@ class VVVFSFile {
     async search(query: string) {
         return await this._vvvfs.search(this._path, query);
     }
-    async watch(handler: (type: string) => Promise<boolean>) {
-        return await this._vvvfs.watch(this._path, handler);
+    /**
+     * 监听文件
+     */
+    watch(handler: (type: string) => Promise<boolean>) {
+        return this._vvvfs.watch(this._path, handler);
+    }
+    /**
+     * 锁定文件
+     */
+    async lock() {
+        return await this._vvvfs.lock(this._path);
+    }
+    /**
+     * 解锁文件
+     */
+    async unlock() {
+        return await this._vvvfs.unlock(this._path);
     }
 }
 
@@ -268,6 +283,10 @@ class VVVFS {
      * 虚拟文件系统监听器
      */
     #watchers: Record<string, Array<(type: string) => Promise<boolean>>> = {};
+    /**
+     * 锁定的文件
+     */
+    #lockedFiles: Record<string, boolean> = {};
     /**
      * 创建虚拟文件系统
      * @param name 虚拟文件系统名称
@@ -575,6 +594,13 @@ class VVVFS {
                     }
                 }
             }
+            if (this.#lockedFiles[targetPath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Write", "文件已被锁定");
+                }
+                return false;
+            }
             if (!(await this.exists(targetPath))) {
                 const success = await this.createFile(targetPath);
                 if (!success) {
@@ -673,6 +699,13 @@ class VVVFS {
                     }
                 }
             }
+            if (this.#lockedFiles[targetPath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Append", "文件已被锁定");
+                }
+                return false;
+            }
             const existingFile = await this.read(targetPath);
             if (existingFile) {
                 const blob = new Blob([existingFile, content], {
@@ -723,6 +756,13 @@ class VVVFS {
                         return null;
                     }
                 }
+            }
+            if (this.#lockedFiles[targetPath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Read", "文件已被锁定");
+                }
+                return null;
             }
             if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
@@ -811,6 +851,13 @@ class VVVFS {
                         return null;
                     }
                 }
+            }
+            if (this.#lockedFiles[targetPath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Read", "文件已被锁定");
+                }
+                return null;
             }
             if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
@@ -901,6 +948,13 @@ class VVVFS {
                     }
                 }
             }
+            if (this.#lockedFiles[targetPath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("List", "文件已被锁定");
+                }
+                return [];
+            }
             if (!(await this.exists(targetPath))) {
                 console.warn("路径不存在");
                 if (this.options.throwError) {
@@ -944,6 +998,13 @@ class VVVFS {
                         return false;
                     }
                 }
+            }
+            if (this.#lockedFiles[sourcePath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Rename", "文件已被锁定");
+                }
+                return false;
             }
             if (!(await this.exists(sourcePath))) {
                 console.warn("文件不存在");
@@ -1014,6 +1075,13 @@ class VVVFS {
                     }
                 }
             }
+            if (this.#lockedFiles[targetPath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Delete", "文件已被锁定");
+                }
+                return false;
+            }
             if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
                 if (this.options.throwError) {
@@ -1069,6 +1137,13 @@ class VVVFS {
                         return false;
                     }
                 }
+            }
+            if (this.#lockedFiles[sourcePath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Move", "文件已被锁定");
+                }
+                return false;
             }
             if (sourcePath === destinationPath) {
                 return true;
@@ -1146,6 +1221,13 @@ class VVVFS {
                         return false;
                     }
                 }
+            }
+            if (this.#lockedFiles[sourcePath]) {
+                console.warn("文件已被锁定");
+                if (this.options.throwError) {
+                    throw new VVVFSError("Copy", "文件已被锁定");
+                }
+                return false;
             }
             if (await this.exists(destinationPath)) {
                 console.warn("目标文件已存在");
@@ -1250,14 +1332,69 @@ class VVVFS {
             return null;
         }
     }
-    async watch(path: string, handler: (type: string) => Promise<boolean>) {
+    /**
+     * 监听文件
+     * @param path 文件路径
+     * @param handler 监听器
+     */
+    watch(path: string, handler: (type: string) => Promise<boolean>) {
         path = joinPath(path);
         if (!this.#watchers[path]) {
             this.#watchers[path] = [];
         }
         this.#watchers[path].push(handler);
     }
+    /**
+     * 锁定文件
+     * @param path 文件路径
+     */
+    async lock(path: string) {
+        path = joinPath(path);
+        if (!(await this.exists(path))) {
+            console.warn("文件不存在");
+            if (this.options.throwError) {
+                throw new VVVFSError("Lock", "文件不存在");
+            }
+            return false;
+        }
+        if (this.#lockedFiles[path]) {
+            console.warn("文件已被锁定");
+            if (this.options.throwError) {
+                throw new VVVFSError("Lock", "文件已被锁定");
+            }
+            return false;
+        }
+        this.#lockedFiles[path] = true;
+        return true;
+    }
+    /**
+     * 解锁文件
+     * @param path 文件路径
+     */
+    async unlock(path: string) {
+        path = joinPath(path);
+        if (!(await this.exists(path))) {
+            console.warn("文件不存在");
+            if (this.options.throwError) {
+                throw new VVVFSError("Unlock", "文件不存在");
+            }
+            return false;
+        }
+        if (!this.#lockedFiles[path]) {
+            console.warn("文件未被锁定");
+            if (this.options.throwError) {
+                throw new VVVFSError("Unlock", "文件未被锁定");
+            }
+            return false;
+        }
+        delete this.#lockedFiles[path];
+        return true;
+    }
 }
+/**
+ * 解析路径
+ * @param path 路径
+ */
 function parsePath(path: string) {
     path = joinPath(path);
     const oldParts = path.split("/");
@@ -1271,6 +1408,11 @@ function parsePath(path: string) {
     if (joinPath(parent, name).length > 4096) throw new VVVFSError("ParsePath", "文件路径过长");
     return { name, parent };
 }
+
+/**
+ * 合并路径
+ * @param paths 路径
+ */
 function joinPath(...paths: string[]) {
     const segments = paths.map((p) => String(p)).filter((p) => p.length > 0);
     if (segments.length === 0) return ".";
@@ -1298,6 +1440,12 @@ function joinPath(...paths: string[]) {
 }
 Object.defineProperty(VVVFS, "version", {
     value: version,
+    writable: false,
+    enumerable: true,
+    configurable: false,
+});
+Object.defineProperty(VVVFS, "author", {
+    value: "IFTC",
     writable: false,
     enumerable: true,
     configurable: false,

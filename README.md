@@ -42,10 +42,12 @@ const vvvfs = new VVVFS("vvvfs", {
 (async function () {
     await vvvfs.reset(); // 重置文件系统
     await vvvfs.init("UserName"); // 初始化文件系统
-    await vvvfs.watch("/home/user/Desktop/test.txt", (type) => {
+    vvvfs.watch("/home/user/Desktop/test.txt", (type) => {
         console.log(type); // 打印文件操作的类型
         return true; // 返回true或false，表示是否取消该操作
     });
+    await vvvfs.lock("/home/user/Desktop/test.txt"); // 锁定文件，防止其他代码访问该文件
+    await vvvfs.unlock("/home/user/Desktop/test.txt"); // 解锁文件
     await vvvfs.createDir("/home/user/Desktop"); // 创建目录，返回true和false
     await vvvfs.writeText("/home/user/Desktop/test.txt", "Hello World!"); // 写入文本文件，写入文件还包括write(path: string, content: Blob)和writeJson(path: string, content: Record<string, any>)方法，返回true和false
     await vvvfs.appendText("/home/user/Desktop/test.txt", "Hello World!"); // 追加文本文件，返回true和false
@@ -83,6 +85,9 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.1.3
+- 新增 `lock` 和 `unlock` 方法，可以锁定文件，防止其他代码访问该文件
 
 ### 0.1.2
 
