@@ -15,6 +15,7 @@ import mime from "mime";
  * @param path 文件路径
  * @param type 文件类型(file或dir)
  * @param file 文件对象
+ * @param locked 是否锁定
  */
 export interface FileRecord {
     id?: number;
@@ -22,6 +23,7 @@ export interface FileRecord {
     path: string;
     type: string;
     file: File | null;
+    locked?: boolean;
 }
 
 /**
@@ -264,6 +266,12 @@ class VVVFSFile {
     async unlock() {
         return await this._vvvfs.unlock(this._path);
     }
+    /**
+     * 判断文件是否已锁定
+     */
+    async isLocked() {
+        return await this._vvvfs.isLocked(this._path);
+    }
 }
 
 const version = packageJson.version;
@@ -284,10 +292,6 @@ class VVVFS {
      * 虚拟文件系统监听器
      */
     #watchers: Record<string, Array<(type: string) => Promise<boolean>>> = {};
-    /**
-     * 锁定的文件
-     */
-    #lockedFiles: Record<string, boolean> = {};
 
     /**
      * 检查文件访问权限（监听器和锁定状态）
@@ -309,7 +313,7 @@ class VVVFS {
                 }
             }
         }
-        if (this.#lockedFiles[path]) {
+        if (await this.#isLocked(path)) {
             if (this.options.throwError) {
                 throw new VVVFSError(
                     operation.charAt(0).toUpperCase() + operation.slice(1),
@@ -319,6 +323,15 @@ class VVVFS {
             return false;
         }
         return true;
+    }
+
+    /**
+     * 内部判断是否锁定（跳过错误包装）
+     */
+    async #isLocked(path: string): Promise<boolean> {
+        const { name, parent } = parsePath(path);
+        const fileRecord = await this.#db.files.where({ name, path: parent }).first();
+        return !!fileRecord?.locked;
     }
 
     /**
@@ -364,6 +377,15 @@ class VVVFS {
             this.#db.version(1).stores({
                 files: "++id, name, path, type, file, [name+path+type]",
             });
+            this.#db.version(2).stores({
+                files: "++id, name, path, type, file, locked, [name+path+type]",
+            }).upgrade(async (tx) => {
+                await tx.table("files").toCollection().modify((file: FileRecord) => {
+                    if (file.locked === undefined) {
+                        file.locked = false;
+                    }
+                });
+            });
         } catch (error) {
             console.error("创建数据库失败", error);
             throw new VVVFSError("CreateDatabase", "创建数据库失败");
@@ -384,12 +406,14 @@ class VVVFS {
             path: "/",
             type: "dir" as const,
             file: new File([], name),
+            locked: false,
         }));
         linuxInitFiles.push({
             name: user || "root",
             path: "/home",
             type: "dir" as const,
             file: new File([], "home"),
+            locked: false,
         });
         try {
             for (const file of linuxInitFiles) {
@@ -410,6 +434,9 @@ class VVVFS {
             this.#db = new Dexie(this.#db.name) as VVVFSDatabase;
             this.#db.version(1).stores({
                 files: "++id, name, path, type, file, [name+path+type]",
+            });
+            this.#db.version(2).stores({
+                files: "++id, name, path, type, file, locked, [name+path+type]",
             });
         } catch (error) {
             console.error("重置数据库失败", error);
@@ -439,6 +466,7 @@ class VVVFS {
                 file: new File([], name, {
                     type: mime.getType(targetPath) || "application/octet-stream",
                 }),
+                locked: false,
             });
             return true;
         }, false);
@@ -463,6 +491,7 @@ class VVVFS {
                         path: "/",
                         type: "dir",
                         file: new File([], ""),
+                        locked: false,
                     });
                     if (name === "") return true;
                 } else {
@@ -474,6 +503,7 @@ class VVVFS {
                 path: parent,
                 type: "dir",
                 file: new File([], name),
+                locked: false,
             });
             return true;
         }, false);
@@ -862,6 +892,7 @@ class VVVFS {
                     path: newParent,
                     type: fileRecord.type,
                     file: fileRecord.file,
+                    locked: false,
                 });
                 return true;
             }
@@ -922,16 +953,22 @@ class VVVFS {
      */
     async lock(path: string) {
         return this.#withErrorHandling("lock", async () => {
-            path = joinPath(path);
-            if (!(await this.exists(path))) {
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
                 return false;
             }
-            if (this.#lockedFiles[path]) {
+            if (await this.#isLocked(targetPath)) {
                 console.warn("文件已被锁定");
                 return false;
             }
-            this.#lockedFiles[path] = true;
+            const { name, parent } = parsePath(targetPath);
+            const fileRecord = await this.#db.files.where({ name, path: parent }).first();
+            if (!fileRecord?.id) {
+                console.warn("文件记录未找到");
+                return false;
+            }
+            await this.#db.files.update(fileRecord.id, { locked: true });
             return true;
         }, false);
     }
@@ -941,17 +978,36 @@ class VVVFS {
      */
     async unlock(path: string) {
         return this.#withErrorHandling("unlock", async () => {
-            path = joinPath(path);
-            if (!(await this.exists(path))) {
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
                 console.warn("文件不存在");
                 return false;
             }
-            if (!this.#lockedFiles[path]) {
+            if (!(await this.#isLocked(targetPath))) {
                 console.warn("文件未被锁定");
                 return false;
             }
-            delete this.#lockedFiles[path];
+            const { name, parent } = parsePath(targetPath);
+            const fileRecord = await this.#db.files.where({ name, path: parent }).first();
+            if (!fileRecord?.id) {
+                console.warn("文件记录未找到");
+                return false;
+            }
+            await this.#db.files.update(fileRecord.id, { locked: false });
             return true;
+        }, false);
+    }
+    /**
+     * 判断文件是否已锁定
+     * @param path 文件路径
+     */
+    async isLocked(path: string) {
+        return this.#withErrorHandling("isLocked", async () => {
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
+                return false;
+            }
+            return await this.#isLocked(targetPath);
         }, false);
     }
 }

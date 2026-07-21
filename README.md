@@ -86,6 +86,10 @@ const vvvfs = new VVVFS("vvvfs", {
 
 ## 更新日志
 
+### 0.1.5
+
+- 重新 `lock` 和 `unlock` 方法
+
 ### 0.1.4
 
 - 使用 AI 优化代码
