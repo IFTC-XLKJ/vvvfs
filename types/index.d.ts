@@ -204,6 +204,110 @@ declare class VVVFSFile {
 }
 
 /**
+ * path类（类似于NodeJS中的path模块）
+ */
+declare class Path {
+    /**
+     * 路径分隔符
+     */
+    static readonly sep: string;
+    /**
+     * 环境变量PATH的分隔符
+     */
+    static readonly delimiter: string;
+    /**
+     * 构造函数
+     * @param paths 路径片段
+     */
+    constructor(...paths: string[]);
+    /**
+     * 获取路径
+     */
+    get path(): string;
+    /**
+     * 设置路径
+     * @param path 路径
+     */
+    set path(path: string);
+    /**
+     * 获取文件名
+     */
+    get name(): string;
+    /**
+     * 获取文件所在目录
+     */
+    get parent(): string;
+    /**
+     * 获取文件扩展名
+     */
+    get ext(): string;
+    /**
+     * 获取根目录（"/"或""）
+     */
+    get root(): string;
+    /**
+     * 判断路径是否为绝对路径
+     */
+    isAbsolute(): boolean;
+    /**
+     * 合并路径
+     * @param paths 路径片段
+     */
+    join(...paths: string[]): string;
+    /**
+     * 转换为字符串
+     */
+    toString(): string;
+    /**
+     * 合并路径
+     * @param paths 路径片段
+     */
+    static join(...paths: string[]): string;
+    /**
+     * 解析路径为绝对路径
+     * @param paths 路径片段
+     */
+    static resolve(...paths: string[]): string;
+    /**
+     * 规范化路径（清除"."、解析".."）
+     * @param path 路径
+     */
+    static normalize(path: string): string;
+    /**
+     * 判断路径是否为绝对路径
+     * @param path 路径
+     */
+    static isAbsolute(path: string): boolean;
+    /**
+     * 获取文件名（可去除后缀）
+     * @param path 路径
+     * @param suffix 后缀（如扩展名）
+     */
+    static basename(path: string, suffix?: string): string;
+    /**
+     * 获取文件所在目录
+     * @param path 路径
+     */
+    static dirname(path: string): string;
+    /**
+     * 获取文件扩展名
+     * @param path 路径
+     */
+    static extname(path: string): string;
+    /**
+     * 解析路径
+     * @param path 路径
+     */
+    static parse(path: string): { root: string; dir: string; base: string; ext: string; name: string };
+    /**
+     * 计算从from到to的相对路径
+     * @param from 起始路径
+     * @param to 目标路径
+     */
+    static relative(from: string, to: string): string;
+}
+
+/**
  * 虚拟文件系统
  * @author IFTC
  * @description 虚拟文件系统
@@ -222,6 +326,10 @@ declare class VVVFS {
      * 虚拟文件系统文件类
      */
     static File: typeof VVVFSFile;
+    /**
+     * path类（类似于NodeJS中的path模块）
+     */
+    static path: typeof Path;
 
     options: VVVFSOptions;
 

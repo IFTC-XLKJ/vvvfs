@@ -274,6 +274,215 @@ class VVVFSFile {
     }
 }
 
+/**
+ * path类（类似于NodeJS中的path模块）
+ */
+class Path {
+    /**
+     * 路径分隔符
+     */
+    static readonly sep = "/";
+    /**
+     * 环境变量PATH的分隔符
+     */
+    static readonly delimiter = ":";
+    /**
+     * 内部存储的路径
+     */
+    private _path: string;
+    /**
+     * 构造函数
+     * @param paths 路径片段
+     */
+    constructor(...paths: string[]) {
+        this._path = Path.resolve(...paths);
+    }
+    /**
+     * 获取路径
+     */
+    get path() {
+        return this._path;
+    }
+    /**
+     * 设置路径
+     * @param path 路径
+     */
+    set path(path: string) {
+        this._path = Path.resolve(path);
+    }
+    /**
+     * 获取文件名
+     */
+    get name() {
+        return Path.basename(this._path);
+    }
+    /**
+     * 获取文件所在目录
+     */
+    get parent() {
+        return Path.dirname(this._path);
+    }
+    /**
+     * 获取文件扩展名
+     */
+    get ext() {
+        return Path.extname(this._path);
+    }
+    /**
+     * 获取根目录（"/"或""）
+     */
+    get root() {
+        return Path.parse(this._path).root;
+    }
+    /**
+     * 判断路径是否为绝对路径
+     */
+    isAbsolute() {
+        return Path.isAbsolute(this._path);
+    }
+    /**
+     * 合并路径
+     * @param paths 路径片段
+     */
+    join(...paths: string[]) {
+        return Path.join(this._path, ...paths);
+    }
+    /**
+     * 转换为字符串
+     */
+    toString() {
+        return this._path;
+    }
+    /**
+     * 合并路径
+     * @param paths 路径片段
+     */
+    static join(...paths: string[]) {
+        return joinPath(...paths);
+    }
+    /**
+     * 解析路径为绝对路径
+     * @param paths 路径片段
+     */
+    static resolve(...paths: string[]) {
+        return paths.length === 0 ? "/" : joinPath(...paths);
+    }
+    /**
+     * 规范化路径（清除"."、解析".."）
+     * @param path 路径
+     */
+    static normalize(path: string) {
+        if (path.length === 0) return ".";
+        const isAbsolute = path.startsWith("/");
+        const trailingSlash = path.length > 1 && path.endsWith("/");
+        const stack: string[] = [];
+        for (const part of path.split("/")) {
+            if (part === "" || part === ".") {
+                continue;
+            } else if (part === "..") {
+                if (stack.length > 0 && stack[stack.length - 1] !== "..") {
+                    stack.pop();
+                } else if (!isAbsolute) {
+                    stack.push("..");
+                }
+            } else {
+                stack.push(part);
+            }
+        }
+        let result = stack.join("/");
+        if (isAbsolute) {
+            result = "/" + result;
+        } else if (result.length === 0) {
+            result = ".";
+        }
+        if (trailingSlash && result !== "/" && result !== "." && !result.endsWith("/")) {
+            result += "/";
+        }
+        return result;
+    }
+    /**
+     * 判断路径是否为绝对路径
+     * @param path 路径
+     */
+    static isAbsolute(path: string) {
+        return path.length > 0 && path.startsWith("/");
+    }
+    /**
+     * 获取文件名（可去除后缀）
+     * @param path 路径
+     * @param suffix 后缀（如扩展名）
+     */
+    static basename(path: string, suffix?: string) {
+        if (path.length === 0) return "";
+        const normalized = Path.normalize(path);
+        if (normalized === "/") return "/";
+        let base = normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+        base = base.slice(base.lastIndexOf("/") + 1);
+        if (suffix && base !== suffix && base.endsWith(suffix)) {
+            base = base.slice(0, base.length - suffix.length);
+        }
+        return base;
+    }
+    /**
+     * 获取文件所在目录
+     * @param path 路径
+     */
+    static dirname(path: string) {
+        const normalized = Path.normalize(path);
+        if (normalized === "/" || normalized === ".") return normalized;
+        const parts = normalized.split("/");
+        parts.pop();
+        const result = parts.join("/");
+        if (result.length === 0) {
+            return Path.isAbsolute(normalized) ? "/" : ".";
+        }
+        return result;
+    }
+    /**
+     * 获取文件扩展名
+     * @param path 路径
+     */
+    static extname(path: string) {
+        const base = Path.basename(path);
+        const lastDot = base.lastIndexOf(".");
+        if (lastDot <= 0) return "";
+        return base.slice(lastDot);
+    }
+    /**
+     * 解析路径
+     * @param path 路径
+     */
+    static parse(path: string) {
+        const base = Path.basename(path);
+        const ext = Path.extname(base);
+        return {
+            root: Path.isAbsolute(path) ? "/" : "",
+            dir: Path.dirname(path),
+            base,
+            ext,
+            name: ext.length > 0 ? base.slice(0, base.length - ext.length) : base,
+        };
+    }
+    /**
+     * 计算从from到to的相对路径
+     * @param from 起始路径
+     * @param to 目标路径
+     */
+    static relative(from: string, to: string) {
+        const fromParts = Path.resolve(from).split("/").filter((part) => part.length > 0);
+        const toParts = Path.resolve(to).split("/").filter((part) => part.length > 0);
+        let i = 0;
+        while (i < fromParts.length && i < toParts.length && fromParts[i] === toParts[i]) {
+            i++;
+        }
+        const up = new Array<string>(Math.max(0, fromParts.length - i)).fill("..").join("/");
+        const down = toParts.slice(i).join("/");
+        if (up.length > 0 && down.length > 0) return up + "/" + down;
+        if (up.length > 0) return up;
+        return down;
+    }
+}
+
 const version = packageJson.version;
 
 class VVVFS {
@@ -288,6 +497,10 @@ class VVVFS {
      * 虚拟文件系统文件类
      */
     static File = VVVFSFile;
+    /**
+     * path类（类似于NodeJS中的path模块）
+     */
+    static path = Path;
     /**
      * 虚拟文件系统监听器
      */
