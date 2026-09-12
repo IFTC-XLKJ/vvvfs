@@ -1,6 +1,6 @@
 {
   "name": "vvvfs",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "一个使用IndexDB实现的虚拟文件系统",
   "keywords": [
     "Virtual",
@@ -17,6 +17,7 @@
   "author": "IFTC",
   "type": "module",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "node esbuild.config.js"

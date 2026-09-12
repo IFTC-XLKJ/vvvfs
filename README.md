@@ -27,6 +27,7 @@ const VVVFS = require("vvvfs"); // CommonJS
 <script src="https://cdn.jsdelivr.net/npm/vvvfs@latest/dist/vvvfs.min.js"></script>
 <script src="https://unpkg.com/vvvfs@latest/dist/vvvfs.min.js"></script>
 <!-- 浏览器 -->
+<!-- GitHub Release: https://github.com/IFTC-XLKJ/vvvfs/releases -->
 ```
 
 3. 初始化
@@ -94,6 +95,10 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.1.8
+
+- 新增 `writeJsonValue` 和 `readJsonValue` 方法，用于读取和写入JSON值（键支持字符串、数字数组下标以及嵌套路径，如 `["a", "b"]`）
 
 ### 0.1.7
 
@@ -267,6 +272,10 @@ Using the `VVVFS.File` class:
 ```
 
 ## Changelog
+
+### 0.1.8
+
+- Added the `writeJsonValue` and `readJsonValue` methods for reading and writing JSON values (keys support strings, numeric array indexes, and nested paths such as `["a", "b"]`)
 
 ### 0.1.7
 

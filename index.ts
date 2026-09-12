@@ -171,6 +171,21 @@ class VVVFSFile {
         return await this._vvvfs.writeJson(this._path, json, format);
     }
     /**
+     * 写入文件JSON值
+     * @param key 键名
+     * @param value 键值
+     */
+    async writeJsonValue(key: string | number | Array<string | number>, value: any) {
+        return await this._vvvfs.writeJsonValue(this._path, key, value);
+    }
+    /**
+     * 读取文件JSON值
+     * @param key 键名
+     */
+    async readJsonValue(key: string | number | Array<string | number>): Promise<any> {
+        return await this._vvvfs.readJsonValue(this._path, key);
+    }
+    /**
      * 追加文件内容
      * @param file 文件对象
      */
@@ -827,6 +842,61 @@ class VVVFS {
             const blob = new Blob([content], { type: "text/plain" });
             return await this.append(path, blob);
         }, false);
+    }
+    /**
+     * 写入 JSON 值
+     * @param path 文件路径
+     * @param key 键名
+     * @param value 键值
+     * @example await vvvfs.writeJsonValue("/example.json", "a", { b: "example"});
+     * @example await vvvfs.writeJsonValue("/example.json", ["a", "b"], "example2");
+     * @example await vvvfs.writeJsonValue("/example.json", 0, "example");
+     */
+    async writeJsonValue(path: string, key: string | number | Array<string | number>, value: any) {
+        return this.#withErrorHandling("writeJsonValue", async () => {
+            let root: any = (await this.readJson(path)) ?? {};
+            const keys = Array.isArray(key) ? key : [key];
+            if (keys.length > 0) {
+                let json: any = root;
+                for (let i = 0; i < keys.length - 1; i++) {
+                    const currentKey = keys[i];
+                    const nextKey = keys[i + 1];
+                    if (
+                        json[currentKey] === undefined ||
+                        json[currentKey] === null ||
+                        typeof json[currentKey] !== "object"
+                    ) {
+                        json[currentKey] = typeof nextKey === "number" ? [] : {};
+                    }
+                    json = json[currentKey];
+                }
+                json[keys[keys.length - 1]] = value;
+            } else {
+                root = value;
+            }
+            return await this.writeJson(path, root);
+        }, false);
+    }
+    /**
+     * 读取 JSON 值
+     * @param path 文件路径
+     * @param key 键名
+     * @example await vvvfs.readJsonValue("/example.json", "a");
+     * @example await vvvfs.readJsonValue("/example.json", ["a", "b"]);
+     * @example await vvvfs.readJsonValue("/example.json", 0);
+     */
+    async readJsonValue(path: string, key: string | number | Array<string | number>): Promise<any> {
+        return this.#withErrorHandling("readJsonValue", async () => {
+            const json = await this.readJson(path);
+            if (json === null || json === undefined) return null;
+            const keys = Array.isArray(key) ? key : [key];
+            let current: any = json;
+            for (const keyPart of keys) {
+                if (current === null || current === undefined) return null;
+                current = current[keyPart];
+            }
+            return current === undefined ? null : current;
+        }, null as any);
     }
     /**
      * 内部读取（跳过访问检查，供内部方法调用）

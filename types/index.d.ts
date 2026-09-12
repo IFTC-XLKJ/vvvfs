@@ -1,17 +1,28 @@
 import { Dexie, Table } from "dexie";
 
 /**
+ * VVVFS 类构造签名（避免在内 declare global 中自引用）
+ */
+type VVVFSConstructor = typeof VVVFS;
+
+/**
+ * VVVFS 类实例类型
+ */
+type VVVFSInstance = VVVFS;
+
+/**
  * 虚拟文件系统
  */
 declare global {
     // 扩展 Window 接口
-    interface window {
-        VVVFS: typeof VVVFS; // 如果 VVFS 是个类，这里可能需要调整，或者直接定义 vvfs 实例
+    interface Window {
+        VVVFS: VVVFSConstructor;
+        vvvfs: VVVFSInstance;
     }
 
     // 扩展 GlobalThis (针对你在 index.js 里的 globalThis.vvfs 写法)
-    // 注意：GlobalThis 和 Window 往往指向同一个对象，但在 TS 类型中有时需要分别处理
-    // var VVVFS: typeof VVVFS; 
+    var VVVFS: VVVFSConstructor;
+    var vvvfs: VVVFSInstance;
 }
 
 
@@ -24,7 +35,7 @@ declare global {
  * @param file 文件对象
  * @param locked 是否锁定
  */
-declare interface FileRecord {
+export interface FileRecord {
     id?: number;
     name: string;
     path: string;
@@ -37,7 +48,7 @@ declare interface FileRecord {
  * 虚拟文件系统数据库
  * @param files 文件存储数据表
  */
-declare interface VVVFSDatabase extends Dexie {
+export interface VVVFSDatabase extends Dexie {
     files: Table<FileRecord, number>;
 }
 
@@ -54,7 +65,7 @@ export interface VVVFSOptions {
 /**
  * 虚拟文件系统错误类
  */
-declare class VVVFSError extends Error {
+export class VVVFSError extends Error {
     /**
      * @param type 错误类型
      * @param message 错误信息
@@ -66,7 +77,7 @@ declare class VVVFSError extends Error {
  * 虚拟文件系统文件类
  * @param path 文件路径
  */
-declare class VVVFSFile {
+export class VVVFSFile {
     /**
      * 获取文件路径
      */
@@ -133,6 +144,17 @@ declare class VVVFSFile {
      * @param json 文件JSON内容
      */
     writeJSON(json: Record<string, unknown>, format?: boolean): Promise<boolean>;
+    /**
+     * 写入文件JSON值
+     * @param key 键名
+     * @param value 键值
+     */
+    writeJsonValue(key: string | number | Array<string | number>, value: any): Promise<boolean>;
+    /**
+     * 读取文件JSON值
+     * @param key 键名
+     */
+    readJsonValue(key: string | number | Array<string | number>): Promise<any>;
     /**
      * 追加文件内容
      * @param file 文件对象
@@ -208,7 +230,7 @@ declare class VVVFSFile {
 /**
  * path类（类似于NodeJS中的path模块）
  */
-declare class Path {
+export class Path {
     /**
      * 路径分隔符
      */
@@ -314,7 +336,7 @@ declare class Path {
  * @author IFTC
  * @description 虚拟文件系统
  */
-declare class VVVFS {
+export class VVVFS {
     static defaultDBName: string;
     /**
      * 虚拟文件系统版本
@@ -400,6 +422,25 @@ declare class VVVFS {
      * @param format 是否格式化
      */
     writeJson(path: string, content: Record<string, unknown>, format?: boolean): Promise<boolean>;
+    /**
+     * 写入 JSON 值
+     * @param path 文件路径
+     * @param key 键名
+     * @param value 键值
+     * @example await vvvfs.writeJsonValue("/example.json", "a", { b: "example"});
+     * @example await vvvfs.writeJsonValue("/example.json", ["a", "b"], "example2");
+     * @example await vvvfs.writeJsonValue("/example.json", 0, "example");
+     */
+    writeJsonValue(path: string, key: string | number | Array<string | number>, value: any): Promise<boolean>;
+    /**
+     * 读取 JSON 值
+     * @param path 文件路径
+     * @param key 键名
+     * @example await vvvfs.readJsonValue("/example.json", "a");
+     * @example await vvvfs.readJsonValue("/example.json", ["a", "b"]);
+     * @example await vvvfs.readJsonValue("/example.json", 0);
+     */
+    readJsonValue(path: string, key: string | number | Array<string | number>): Promise<any>;
     /**
      * 追加内容
      * @param path 文件路径
@@ -497,10 +538,10 @@ declare class VVVFS {
  * 解析路径
  * @param path 路径
  */
-declare function parsePath(path: string): { name: string; parent: string };
+export function parsePath(path: string): { name: string; parent: string };
 
 /**
  * 合并路径
  * @param paths 路径
  */
-declare function joinPath(...paths: string[]): string;
+export function joinPath(...paths: string[]): string;
