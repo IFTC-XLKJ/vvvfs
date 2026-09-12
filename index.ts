@@ -37,9 +37,11 @@ export interface VVVFSDatabase extends Dexie {
 /**
  * 虚拟文件系统配置项
  * @param throwError 是否抛出错误
+ * @param init 是否自动初始化，传入字符串时，为用户名，传入true时，使用默认用户名
  */
 export interface VVVFSOptions {
     throwError: boolean;
+    init: boolean | string;
 }
 
 /**
@@ -582,6 +584,7 @@ class VVVFS {
         name?: string,
         options = {
             throwError: false,
+            init: false,
         },
     ) {
         this.options = options;
@@ -599,6 +602,7 @@ class VVVFS {
                     }
                 });
             });
+            this.options.init ? this.init(this.options.init == true ? "root" : this.options.init) : void 0;
         } catch (error) {
             console.error("创建数据库失败", error);
             throw new VVVFSError("CreateDatabase", "创建数据库失败");

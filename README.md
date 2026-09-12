@@ -2,6 +2,8 @@
 
 一个使用Dexie.js，基于IndexedDB的轻量、简单的浏览器中的Linux虚拟文件系统
 
+GitHub仓库: https://github.com/IFTC-XLKJ/vvvfs
+
 ## 快速开始
 
 1. 安装依赖
@@ -32,6 +34,7 @@ const VVVFS = require("vvvfs"); // CommonJS
 ```javascript
 const vvvfs = new VVVFS("vvvfs", {
   throwError: true, // 设置为true后，操作文件失败时，不会返回false，而是会抛出错误
+  init: "IFTC", // 自动初始化，用户名为 IFTC
 }); // 创建一个名为vvvfs的虚拟文件系统
 ```
 
@@ -91,6 +94,10 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.1.7
+
+- 新增 `init` 选项，用于是否自动初始化，传入字符串时，则为初始化的用户名，传入true时，则为默认用户名。
 
 ### 0.1.6
 
@@ -168,6 +175,8 @@ const vvvfs = new VVVFS("vvvfs", {
 
 A lightweight and simple Linux virtual file system in the browser, based on IndexedDB, built with Dexie.js
 
+GitHub repository: https://github.com/IFTC-XLKJ/vvvfs
+
 ## Quick Start
 
 1. Install the dependency
@@ -198,6 +207,7 @@ const VVVFS = require("vvvfs"); // CommonJS
 ```javascript
 const vvvfs = new VVVFS("vvvfs", {
   throwError: true, // When set to true, failed file operations throw an error instead of returning false
+  init: "IFTC", // Automatically initialize with the username IFTC
 }); // Create a virtual file system named vvvfs
 ```
 
@@ -257,6 +267,10 @@ Using the `VVVFS.File` class:
 ```
 
 ## Changelog
+
+### 0.1.7
+
+- Added the `init` option to control automatic initialization: when passed a string, it is used as the username for initialization; when passed `true`, the default username is used.
 
 ### 0.1.6
 

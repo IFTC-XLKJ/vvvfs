@@ -44,9 +44,11 @@ declare interface VVVFSDatabase extends Dexie {
 /**
  * 虚拟文件系统配置项
  * @param throwError 是否抛出错误
+ * @param init 是否自动初始化，传入字符串时，为用户名，传入true时，使用默认用户名
  */
-declare interface VVVFSOptions {
+export interface VVVFSOptions {
     throwError: boolean;
+    init: boolean | string;
 }
 
 /**
