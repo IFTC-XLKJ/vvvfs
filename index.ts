@@ -45,6 +45,22 @@ export interface VVVFSOptions {
 }
 
 /**
+ * 虚拟文件系统下载配置项
+ * @param headers 请求头
+ * @param mode 下载模式（fetch或xhr）
+ * @param onProgress 下载进度事件
+ * @param onError 下载出错事件
+ * @param onSuccess 下载成功事件
+ */
+export interface VVVFSDownloadOptions {
+    headers?: Record<string, string>;
+    mode?: "fetch" | "xhr";
+    onProgress?: (progress: number) => void;
+    onError?: (error: any) => void;
+    onSuccess?: (success: boolean) => void;
+}
+
+/**
  * 虚拟文件系统错误类
  */
 class VVVFSError extends Error {
@@ -288,6 +304,21 @@ class VVVFSFile {
      */
     async isLocked() {
         return await this._vvvfs.isLocked(this._path);
+    }
+    /**
+     * 保存文件
+     * @param name 文件名
+     */
+    async save(name: string) {
+        return await this._vvvfs.saveFile(this._path, name);
+    }
+    /**
+     * 下载文件
+     * @param url 文件链接
+     * @param options 下载配置项
+     */
+    async download(url: string | URL | Request, options: VVVFSDownloadOptions = {}) {
+        return await this._vvvfs.downloadFile(url, this._path, options);
     }
 }
 
@@ -1296,6 +1327,166 @@ class VVVFS {
             }
             return await this.#isLocked(targetPath);
         }, false);
+    }
+    /**
+     * 保存文件
+     * @param path 文件路径
+     * @param name 文件名
+     */
+    async saveFile(path: string, name?: string) {
+        return this.#withErrorHandling("saveFile", async () => {
+            const targetPath = joinPath(path);
+            if (!(await this.#checkAccess(targetPath, "read"))) return false;
+            const file = await this.#internalRead(targetPath);
+            if (!file) {
+                console.warn("文件不存在");
+                return false;
+            }
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(file);
+            a.download = name || Path.basename(targetPath);
+            a.click();
+            URL.revokeObjectURL(a.href);
+            return true;
+        }, false);
+    }
+    /**
+     * 下载文件
+     * @param url 文件链接
+     * @param path 保存路径
+     * @param options 下载配置项
+     */
+    async downloadFile(
+        url: string | URL | Request,
+        path: string,
+        options: VVVFSDownloadOptions = {},
+    ) {
+        return this.#withErrorHandling("downloadFile", async () => {
+            const targetPath = joinPath(path);
+            if (!(await this.#checkAccess(targetPath, "write"))) return false;
+            const content =
+                (options.mode || "fetch") === "xhr"
+                    ? await this.#downloadWithXHR(url, options)
+                    : await this.#downloadWithFetch(url, options);
+            if (!content) return false;
+            const blob = new Blob([content], {
+                type: mime.getType(targetPath) || "application/octet-stream",
+            });
+            const success = await this.#internalWrite(targetPath, blob);
+            if (success && options.onSuccess) {
+                options.onSuccess(success);
+            }
+            return success;
+        }, false);
+    }
+    /**
+     * 使用fetch下载文件
+     * @param url 文件链接
+     * @param options 下载配置项
+     */
+    async #downloadWithFetch(
+        url: string | URL | Request,
+        options: VVVFSDownloadOptions,
+    ): Promise<Blob | null> {
+        const request =
+            url instanceof Request
+                ? url
+                : new Request(url, { headers: options.headers });
+        const response = await fetch(request);
+        if (!response.ok) {
+            const error = new Error(`下载失败，HTTP ${response.status}`);
+            if (options.onError) {
+                options.onError(error);
+                return null;
+            }
+            throw error;
+        }
+        const total = Number(response.headers.get("Content-Length") || 0);
+        if (options.onProgress && response.body && total > 0) {
+            const reader = response.body.getReader();
+            const chunks: Uint8Array<ArrayBuffer>[] = [];
+            let loaded = 0;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = value as Uint8Array<ArrayBuffer>;
+                chunks.push(chunk);
+                loaded += chunk.length;
+                options.onProgress(Math.round((loaded / total) * 100));
+            }
+            return new Blob(chunks);
+        }
+        return await response.blob();
+    }
+    /**
+     * 使用XHR下载文件
+     * @param url 文件链接
+     * @param options 下载配置项
+     */
+    #downloadWithXHR(
+        url: string | URL | Request,
+        options: VVVFSDownloadOptions,
+    ): Promise<Blob | null> {
+        return new Promise((resolve, reject) => {
+            const requestUrl =
+                url instanceof URL
+                    ? url.href
+                    : url instanceof Request
+                        ? url.url
+                        : url;
+            const headers = url instanceof Request ? url.headers : options.headers;
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", requestUrl);
+            if (headers instanceof Headers) {
+                headers.forEach((value, key) => {
+                    xhr.setRequestHeader(key, value);
+                });
+            } else if (headers) {
+                for (const [key, value] of Object.entries(headers)) {
+                    xhr.setRequestHeader(key, value);
+                }
+            }
+            xhr.responseType = "blob";
+            xhr.onprogress = (event) => {
+                if (options.onProgress && event.total > 0) {
+                    options.onProgress(
+                        Math.round((event.loaded / event.total) * 100),
+                    );
+                }
+            };
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.response as Blob);
+                } else {
+                    const error = new Error(`下载失败，HTTP ${xhr.status}`);
+                    if (options.onError) {
+                        options.onError(error);
+                        resolve(null);
+                    } else {
+                        reject(error);
+                    }
+                }
+            };
+            xhr.onerror = () => {
+                const error = new Error("下载失败");
+                if (options.onError) {
+                    options.onError(error);
+                    resolve(null);
+                } else {
+                    reject(error);
+                }
+            };
+            try {
+                xhr.send();
+            } catch (error) {
+                if (options.onError) {
+                    options.onError(error);
+                    resolve(null);
+                } else {
+                    reject(error);
+                }
+            }
+        });
     }
 }
 /**

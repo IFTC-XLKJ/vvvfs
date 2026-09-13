@@ -96,6 +96,12 @@ const vvvfs = new VVVFS("vvvfs", {
 
 ## 更新日志
 
+### 0.1.9
+
+- 新增 `saveFile` 方法，用于保存文件
+- 新增 `downloadFile` 方法，用于下载文件并保存到IndexedDB（支持`fetch`和`xhr`两种模式，以及下载进度、错误和成功事件）
+- `VVVFS.File` 类新增 `save` 和 `download` 方法
+
 ### 0.1.8
 
 - 新增 `writeJsonValue` 和 `readJsonValue` 方法，用于读取和写入JSON值（键支持字符串、数字数组下标以及嵌套路径，如 `["a", "b"]`）
@@ -272,6 +278,12 @@ Using the `VVVFS.File` class:
 ```
 
 ## Changelog
+
+### 0.1.9
+
+- Added the `saveFile` method for saving files
+- Added the `downloadFile` method for downloading files to IndexedDB (supports both `fetch` and `xhr` modes, as well as progress, error, and success callbacks)
+- Added the `save` and `download` methods to the `VVVFS.File` class
 
 ### 0.1.8
 

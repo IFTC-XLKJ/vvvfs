@@ -63,6 +63,22 @@ export interface VVVFSOptions {
 }
 
 /**
+ * 虚拟文件系统下载配置项
+ * @param headers 请求头
+ * @param mode 下载模式（fetch或xhr）
+ * @param onProgress 下载进度事件
+ * @param onError 下载出错事件
+ * @param onSuccess 下载成功事件
+ */
+export interface VVVFSDownloadOptions {
+    headers?: Record<string, string>;
+    mode?: "fetch" | "xhr";
+    onProgress?: (progress: number) => void;
+    onError?: (error: any) => void;
+    onSuccess?: (success: boolean) => void;
+}
+
+/**
  * 虚拟文件系统错误类
  */
 export class VVVFSError extends Error {
@@ -225,6 +241,17 @@ export class VVVFSFile {
      * 判断文件是否已锁定
      */
     isLocked(): Promise<boolean>;
+    /**
+     * 保存文件
+     * @param name 文件名
+     */
+    save(name: string): Promise<boolean>;
+    /**
+     * 下载文件
+     * @param url 文件链接
+     * @param options 下载配置项
+     */
+    download(url: string | URL | Request, options?: VVVFSDownloadOptions): Promise<boolean>;
 }
 
 /**
@@ -532,6 +559,23 @@ export class VVVFS {
      * @param path 文件路径
      */
     isLocked(path: string): Promise<boolean>;
+    /**
+     * 保存文件
+     * @param path 文件路径
+     * @param name 文件名
+     */
+    saveFile(path: string, name?: string): Promise<boolean>;
+    /**
+     * 下载文件
+     * @param url 文件链接
+     * @param path 保存路径
+     * @param options 下载配置项
+     */
+    downloadFile(
+        url: string | URL | Request,
+        path: string,
+        options?: VVVFSDownloadOptions,
+    ): Promise<boolean>;
 }
 
 /**
