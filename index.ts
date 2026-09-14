@@ -1,6 +1,10 @@
 import { Dexie, Table } from "dexie";
 import packageJson from "./package.json" with { type: "json" };
-import mime from "mime";
+import { Mime } from "mime";
+import standardTypes from "mime/types/standard.js";
+import otherTypes from "mime/types/other.js";
+
+const mime = new Mime(standardTypes, otherTypes);
 
 /**
  * 虚拟文件系统
@@ -1487,6 +1491,15 @@ class VVVFS {
                 }
             }
         });
+    }
+    /**
+     * 注册MIME类型
+     * @param mimetype MIME类型
+     * @param extensions 扩展名数组
+     * @example VVVFS.registerMIMEType("example/abc", ["example", "example2"])
+     */
+    static registerMIMEType(mimetype: string, extensions: string[]) {
+        return mime.define({ [mimetype]: extensions });
     }
 }
 /**

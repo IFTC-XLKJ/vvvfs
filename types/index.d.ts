@@ -1,4 +1,5 @@
 import { Dexie, Table } from "dexie";
+import { Mime } from "mime";
 
 /**
  * VVVFS 类构造签名（避免在内 declare global 中自引用）
@@ -576,6 +577,13 @@ export class VVVFS {
         path: string,
         options?: VVVFSDownloadOptions,
     ): Promise<boolean>;
+    /**
+     * 注册MIME类型
+     * @param mimetype MIME类型
+     * @param extensions 扩展名数组
+     * @example VVVFS.registerMIMEType("example/abc", ["example", "example2"])
+     */
+    static registerMIMEType(mimetype: string, extensions: string[]): Mime;
 }
 
 /**

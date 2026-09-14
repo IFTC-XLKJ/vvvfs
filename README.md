@@ -96,6 +96,10 @@ const vvvfs = new VVVFS("vvvfs", {
 
 ## 更新日志
 
+### 0.2.0
+
+- 新增 `registerMIMEType` 静态方法，用于注册自定义MIME类型
+
 ### 0.1.9
 
 - 新增 `saveFile` 方法，用于保存文件
@@ -278,6 +282,10 @@ Using the `VVVFS.File` class:
 ```
 
 ## Changelog
+
+### 0.2.0
+
+- Added the `registerMIMEType` static method for registering custom MIME types
 
 ### 0.1.9
 
