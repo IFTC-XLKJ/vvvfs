@@ -35,6 +35,7 @@ declare global {
  * @param type 文件类型(file或dir)
  * @param file 文件对象
  * @param locked 是否锁定
+ * @param hidden 是否隐藏
  */
 export interface FileRecord {
     id?: number;
@@ -43,6 +44,7 @@ export interface FileRecord {
     type: string;
     file: File | null;
     locked?: boolean;
+    hidden?: boolean;
 }
 
 /**
@@ -242,6 +244,15 @@ export class VVVFSFile {
      * 判断文件是否已锁定
      */
     isLocked(): Promise<boolean>;
+    /**
+     * 设置隐藏属性
+     * @param hidden 是否隐藏
+     */
+    setHide(hidden: boolean): Promise<boolean>;
+    /**
+     * 获取隐藏属性
+     */
+    getHide(): Promise<boolean>;
     /**
      * 保存文件
      * @param name 文件名
@@ -560,6 +571,17 @@ export class VVVFS {
      * @param path 文件路径
      */
     isLocked(path: string): Promise<boolean>;
+    /**
+     * 设置隐藏属性
+     * @param path 文件路径
+     * @param hidden 是否隐藏
+     */
+    setHide(path: string, hidden: boolean): Promise<boolean>;
+    /**
+     * 获取隐藏属性
+     * @param path 文件路径
+     */
+    getHide(path: string): Promise<boolean>;
     /**
      * 保存文件
      * @param path 文件路径

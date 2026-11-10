@@ -20,6 +20,7 @@ const mime = new Mime(standardTypes, otherTypes);
  * @param type 文件类型(file或dir)
  * @param file 文件对象
  * @param locked 是否锁定
+ * @param hidden 是否隐藏
  */
 export interface FileRecord {
     id?: number;
@@ -28,6 +29,7 @@ export interface FileRecord {
     type: string;
     file: File | null;
     locked?: boolean;
+    hidden?: boolean;
 }
 
 /**
@@ -308,6 +310,19 @@ class VVVFSFile {
      */
     async isLocked() {
         return await this._vvvfs.isLocked(this._path);
+    }
+    /**
+     * 设置隐藏属性
+     * @param hidden 是否隐藏
+     */
+    async setHide(hidden: boolean) {
+        return await this._vvvfs.setHide(this._path, hidden);
+    }
+    /**
+     * 获取隐藏属性
+     */
+    async getHide() {
+        return await this._vvvfs.getHide(this._path);
     }
     /**
      * 保存文件
@@ -652,6 +667,15 @@ class VVVFS {
                     }
                 });
             });
+            this.#db.version(3).stores({
+                files: "++id, name, path, type, file, locked, hidden, [name+path+type]",
+            }).upgrade(async (tx) => {
+                await tx.table("files").toCollection().modify((file: FileRecord) => {
+                    if (file.hidden === undefined) {
+                        file.hidden = false;
+                    }
+                });
+            });
             this.options.init ? this.init(this.options.init == true ? "root" : this.options.init) : void 0;
         } catch (error) {
             console.error("创建数据库失败", error);
@@ -681,6 +705,7 @@ class VVVFS {
             type: "dir" as const,
             file: new File([], "home"),
             locked: false,
+            hidden: false,
         });
         try {
             for (const file of linuxInitFiles) {
@@ -704,6 +729,9 @@ class VVVFS {
             });
             this.#db.version(2).stores({
                 files: "++id, name, path, type, file, locked, [name+path+type]",
+            });
+            this.#db.version(3).stores({
+                files: "++id, name, path, type, file, locked, hidden, [name+path+type]",
             });
         } catch (error) {
             console.error("重置数据库失败", error);
@@ -734,6 +762,7 @@ class VVVFS {
                     type: mime.getType(targetPath) || "application/octet-stream",
                 }),
                 locked: false,
+                hidden: false,
             });
             return true;
         }, false);
@@ -759,6 +788,7 @@ class VVVFS {
                         type: "dir",
                         file: new File([], ""),
                         locked: false,
+                        hidden: false,
                     });
                     if (name === "") return true;
                 } else {
@@ -771,6 +801,7 @@ class VVVFS {
                 type: "dir",
                 file: new File([], name),
                 locked: false,
+                hidden: false,
             });
             return true;
         }, false);
@@ -1215,6 +1246,7 @@ class VVVFS {
                     type: fileRecord.type,
                     file: fileRecord.file,
                     locked: false,
+                    hidden: false,
                 });
                 return true;
             }
@@ -1330,6 +1362,43 @@ class VVVFS {
                 return false;
             }
             return await this.#isLocked(targetPath);
+        }, false);
+    }
+    /**
+     * 设置隐藏属性
+     * @param path 文件路径
+     * @param hidden 是否隐藏
+     */
+    async setHide(path: string, hidden: boolean) {
+        return this.#withErrorHandling("setHide", async () => {
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
+                console.warn("文件不存在");
+                return false;
+            }
+            const { name, parent } = parsePath(targetPath);
+            const fileRecord = await this.#db.files.where({ name, path: parent }).first();
+            if (!fileRecord?.id) {
+                console.warn("文件记录未找到");
+                return false;
+            }
+            await this.#db.files.update(fileRecord.id, { hidden });
+            return true;
+        }, false);
+    }
+    /**
+     * 获取隐藏属性
+     * @param path 文件路径
+     */
+    async getHide(path: string) {
+        return this.#withErrorHandling("getHide", async () => {
+            const targetPath = joinPath(path);
+            if (!(await this.exists(targetPath))) {
+                return false;
+            }
+            const { name, parent } = parsePath(targetPath);
+            const fileRecord = await this.#db.files.where({ name, path: parent }).first();
+            return !!fileRecord?.hidden;
         }, false);
     }
     /**

@@ -4,6 +4,8 @@
 
 GitHub仓库: https://github.com/IFTC-XLKJ/vvvfs
 
+爱发电主页: https://afdian.com/a/IFTCCEO
+
 ## 快速开始
 
 1. 安装依赖
@@ -95,6 +97,13 @@ const vvvfs = new VVVFS("vvvfs", {
 ```
 
 ## 更新日志
+
+### 0.2.1
+
+- 新增 `setHide` 方法，用于设置文件或文件夹的隐藏属性
+- 新增 `getHide` 方法，用于获取文件或文件夹的隐藏属性
+- `FileRecord` 新增 `hidden` 字段
+- 数据库新增 version 3 迁移，自动为已有记录填充 `hidden: false`
 
 ### 0.2.0
 
@@ -192,6 +201,8 @@ A lightweight and simple Linux virtual file system in the browser, based on Inde
 
 GitHub repository: https://github.com/IFTC-XLKJ/vvvfs
 
+Afdian homepage: https://afdian.com/a/IFTCCEO
+
 ## Quick Start
 
 1. Install the dependency
@@ -282,6 +293,13 @@ Using the `VVVFS.File` class:
 ```
 
 ## Changelog
+
+### 0.2.1
+
+- Added the `setHide` method to set the hidden attribute of a file or directory
+- Added the `getHide` method to get the hidden attribute of a file or directory
+- Added the `hidden` field to `FileRecord`
+- Added database version 3 migration to automatically fill `hidden: false` for existing records
 
 ### 0.2.0
 
