@@ -193,6 +193,16 @@ const vvvfs = new VVVFS("vvvfs", {
 
 ---
 
+## 赞助
+
+如果这个项目对你有帮助，欢迎通过爱发电支持我们：
+
+[![爱发电](https://img.shields.io/badge/爱发电-支持我们-ff69b4.svg?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48cGF0aCBmaWxsPSIjZmY2OWI0IiBkPSJNOCAxNS41cy03LTQuNS03LTkgQTEuNSAxLjUgMCAwIDAgOCAwYTEuNSAxLjUgMCAwIDAgNyA2LjVjMCA0LjUtNyA5LTcgOXoiLz48L3N2Zz4=)](https://afdian.com/a/IFTCCEO)
+
+**爱发电主页：** https://afdian.com/a/IFTCCEO
+
+---
+
 # English
 
 # VVVFS
@@ -386,3 +396,13 @@ Using the `VVVFS.File` class:
 ### 0.0.1
 
 - Initial release
+
+---
+
+## Sponsor
+
+If this project is helpful to you, please consider supporting us on Afdian:
+
+[![Afdian](https://img.shields.io/badge/Afdian-Support%20us-ff69b4.svg?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDE2IDE2Ij48cGF0aCBmaWxsPSIjZmY2OWI0IiBkPSJNOCAxNS41cy03LTQuNS03LTkgQTEuNSAxLjUgMCAwIDAgOCAwYTEuNSAxLjUgMCAwIDAgNyA2LjVjMCA0LjUtNyA5LTcgOXoiLz48L3N2Zz4=)](https://afdian.com/a/IFTCCEO)
+
+**Afdian homepage:** https://afdian.com/a/IFTCCEO
