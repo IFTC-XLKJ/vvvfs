@@ -609,6 +609,75 @@ export class VVVFS {
 }
 
 /**
+ * <fs-img> 元素 load 事件详情
+ */
+export interface FsImgLoadDetail {
+    /**
+     * 图片路径
+     */
+    path: string;
+    /**
+     * 图片文件对象
+     */
+    file: File | null;
+}
+
+/**
+ * <fs-img> 元素 error 事件详情
+ */
+export interface FsImgErrorDetail {
+    /**
+     * 图片路径
+     */
+    path: string;
+    /**
+     * 错误信息
+     */
+    message: string;
+}
+
+/**
+ * 自定义图片元素 <fs-img>
+ * @description 直接读取并显示存储在 vvvfs 中的图片文件
+ * @attributes
+ * - src / path：图片在 vvvfs 中的路径（src 优先，其次 path）
+ * - dbname：数据库名，默认 "vvvfs"；未指定且存在全局 vvvfs 实例时直接使用该实例
+ * - alt / width / height：透传到内部 <img> 元素
+ * - watch：存在时，文件发生变化自动刷新
+ * @events
+ * - load：图片加载完成（detail: { path, file }）
+ * - error：图片加载失败（detail: { path, message }）
+ * @example <fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
+ */
+export class FsImg extends HTMLElement {
+    /**
+     * 监听的属性列表
+     */
+    static get observedAttributes(): string[];
+    /**
+     * 构造函数
+     */
+    constructor();
+    /**
+     * 图片路径（src 优先，其次 path）
+     */
+    src: string;
+    /**
+     * 数据库名
+     */
+    dbname: string;
+    /**
+     * 手动刷新（重新读取并显示图片）
+     */
+    refresh(): Promise<boolean>;
+    /**
+     * 调度一次 watch 触发的刷新（内部使用）
+     * @internal
+     */
+    scheduleWatchRefresh(): void;
+}
+
+/**
  * 解析路径
  * @param path 路径
  */

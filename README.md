@@ -102,7 +102,40 @@ const vvvfs = new VVVFS("vvvfs", {
 // 用法与 vvvfs 相当
 ```
 
+### 使用 `<fs-img>` 自定义元素
+
+库加载后会自动注册 `<fs-img>` 元素，可直接显示 vvvfs 中的图片文件：
+
+```html
+<fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
+```
+
+```javascript
+// 也可通过 JS 动态创建
+const img = document.createElement("fs-img");
+img.src = "/home/user/Pictures/logo.png";
+document.body.appendChild(img);
+```
+
+属性：
+
+- `src` / `path`：图片在 vvvfs 中的路径（`src` 优先）
+- `dbname`：数据库名，默认 `vvvfs`；未指定且存在全局 `vvvfs` 实例时直接使用该实例
+- `alt` / `width` / `height`：透传到内部 `<img>` 元素
+- `watch`：存在时，文件内容发生变化后自动刷新
+
+事件：`load`（加载完成）、`error`（加载失败），`detail` 中包含 `path` 与 `file`（或 `message`）。元素上还会写入 `data-state` 属性（`loading` / `loaded` / `error`），便于 CSS 定制。
+
+内部使用 Shadow DOM 渲染：图片暴露为 `part="img"`，可用 `fs-img::part(img) { ... }` 定制样式；默认插槽内容会在加载失败或未设置路径时显示（如 `<fs-img src="/a.png">加载失败</fs-img>`）。
+
 ## 更新日志
+
+### 0.2.2
+
+- 新增 `<fs-img>` 自定义元素，可直接显示 vvvfs 中的图片文件
+- `<fs-img>` 新增 `src` / `path` / `dbname` / `alt` / `width` / `height` / `watch` 属性
+- `<fs-img>` 新增 `load` / `error` 事件与 `data-state` 状态属性
+- `<fs-img>` 使用 Shadow DOM 渲染，支持 `::part(img)` 样式定制与默认插槽回退内容
 
 ### 0.2.1
 
@@ -304,7 +337,40 @@ Using the `VVVFS.File` class:
 // The usage is equivalent to vvvfs
 ```
 
+### Using the `<fs-img>` Custom Element
+
+Once the library is loaded, the `<fs-img>` element is registered automatically and can display image files stored in vvvfs directly:
+
+```html
+<fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
+```
+
+```javascript
+// It can also be created dynamically
+const img = document.createElement("fs-img");
+img.src = "/home/user/Pictures/logo.png";
+document.body.appendChild(img);
+```
+
+Attributes:
+
+- `src` / `path`: path of the image inside vvvfs (`src` takes precedence)
+- `dbname`: database name, defaults to `vvvfs`; when omitted and a global `vvvfs` instance exists, that instance is used directly
+- `alt` / `width` / `height`: passed through to the inner `<img>` element
+- `watch`: when present, the image is refreshed automatically after the file content changes
+
+Events: `load` (image loaded) and `error` (loading failed); `detail` contains `path` plus `file` (or `message`). A `data-state` attribute (`loading` / `loaded` / `error`) is also written to the element for CSS customization.
+
+Rendering happens inside a Shadow DOM: the image is exposed as `part="img"`, so it can be styled with `fs-img::part(img) { ... }`; the default slot content is shown when loading fails or no path is set (e.g. `<fs-img src="/a.png">failed</fs-img>`).
+
 ## Changelog
+
+### 0.2.2
+
+- Added the `<fs-img>` custom element to display image files stored in vvvfs directly
+- Added the `src` / `path` / `dbname` / `alt` / `width` / `height` / `watch` attributes to `<fs-img>`
+- Added the `load` / `error` events and the `data-state` attribute to `<fs-img>`
+- `<fs-img>` renders inside a Shadow DOM, supporting `::part(img)` styling and a default slot fallback
 
 ### 0.2.1
 
