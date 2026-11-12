@@ -110,6 +110,8 @@ const vvvfs = new VVVFS("vvvfs", {
 <fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
 <fs-audio src="/home/user/Music/demo.mp3"></fs-audio>
 <fs-video src="/home/user/Videos/demo.mp4" width="320"></fs-video>
+<!-- src 也支持 http(s) 云端地址，会先下载到本地缓存再显示 -->
+<fs-img src="https://example.com/Pictures/logo.png"></fs-img>
 ```
 
 ```javascript
@@ -119,9 +121,22 @@ img.src = "/home/user/Pictures/logo.png";
 document.body.appendChild(img);
 ```
 
+`src` 除了 vvvfs 内的路径，也支持 `http(s)` 云端地址。文件会缓存到 `/home/.cache/cloud/<hostname>/<pathname>`，再从缓存显示 / 播放：
+
+```html
+<fs-img src="https://example.com/Pictures/logo.png"></fs-img>
+<fs-video src="https://example.com/Videos/demo.mp4" width="320"></fs-video>
+```
+
+- **缓存优先**：已有缓存时先直接展示缓存，再发送 HEAD 校验远端文件大小；大小不一致、HEAD 未返回 Content-Type 或缓存不可显示时，自动重新下载并刷新
+- **多线程下载**：默认使用 4 线程按 Range 分片并行下载（`vvvfs.downloadFile(url, path, { threads })` 可调整，1-8）；文件过小、服务器不支持 Range 或分片失败时自动回退单线程
+- `vvvfs.head(url)` 可单独获取远端文件的 `Content-Length` / `Content-Type`，用于自定义校验
+- 下载使用 `fetch`，目标服务器需允许跨域（CORS）
+- 云端文件同样支持 `watch`，监听的是本地缓存路径
+
 三者共有的属性：
 
-- `src` / `path`：文件在 vvvfs 中的路径（`src` 优先）
+- `src` / `path`：媒体路径（`src` 优先），支持 vvvfs 内的路径与 `http(s)` 云端地址
 - `dbname`：数据库名，默认 `vvvfs`；未指定且存在全局 `vvvfs` 实例时直接使用该实例
 - `watch`：`true` 时启用文件监听，`false` 时停止监听；启用后文件内容发生变化会自动刷新（缺省或空值视为 `true`，兼容 `<fs-img watch>` 的写法）
 
@@ -131,13 +146,19 @@ document.body.appendChild(img);
 - `<fs-audio>`：`autoplay` / `loop` / `muted` / `preload` 透传到内部 `<audio>` 元素；`controls` 默认开启，移除该属性即可关闭
 - `<fs-video>`：`autoplay` / `loop` / `muted` / `preload` / `width` / `height` 透传到内部 `<video>` 元素；`controls` 默认开启，移除该属性即可关闭
 
-事件：`load`（加载完成）、`error`（加载失败），`detail` 中包含 `path` 与 `file`（或 `message`）。元素上还会写入 `data-state` 属性（`loading` / `loaded` / `error`），便于 CSS 定制。
+事件：`load`（加载完成）、`error`（加载失败），`detail` 中包含 `path` 与 `file`（或 `message`）；`path` 为媒体文件在 vvvfs 中的实际路径，云端文件即本地缓存路径。元素上还会写入 `data-state` 属性（`loading` / `loaded` / `error`），便于 CSS 定制。
 
 此外提供 `data` 属性（JS 属性），返回当前媒体文件的 Blob 对象（未加载或加载失败时为 `null`），可用于上传、二次处理等场景。
 
 内部使用 Shadow DOM 渲染：媒体元素分别暴露为 `part="img"` / `part="audio"` / `part="video"`，可用 `fs-img::part(img) { ... }` 等定制样式；默认插槽内容会在加载失败或未设置路径时显示（如 `<fs-audio src="/a.mp3">加载失败</fs-audio>`）。
 
 ## 更新日志
+
+### 0.2.4
+- `<fs-img>` / `<fs-audio>` / `<fs-video>` 的 `src` 支持 `http(s)` 云端地址：文件缓存到 `/home/.cache/cloud/<hostname>/<pathname>` 后显示 / 播放
+- 云端文件改为**缓存优先**：先展示已有缓存，再发送 HEAD 校验远端文件大小；大小不一致、HEAD 未返回 Content-Type 或缓存不可显示时自动重新下载并刷新
+- `downloadFile` 支持多线程下载（默认 4 线程，`threads` 可配置 1-8，按 Range 分片并行）；文件过小、服务器不支持 Range 或分片失败时自动回退单线程
+- 新增 `vvvfs.head(url)` 方法，返回远端文件的 `Content-Length` / `Content-Type` / `acceptRanges`
 
 ### 0.2.3
 
@@ -361,6 +382,8 @@ Once the library is loaded, these three elements are registered automatically an
 <fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
 <fs-audio src="/home/user/Music/demo.mp3"></fs-audio>
 <fs-video src="/home/user/Videos/demo.mp4" width="320"></fs-video>
+<!-- src also accepts http(s) URLs; the file is downloaded to the local cache first -->
+<fs-img src="https://example.com/Pictures/logo.png"></fs-img>
 ```
 
 ```javascript
@@ -370,9 +393,22 @@ img.src = "/home/user/Pictures/logo.png";
 document.body.appendChild(img);
 ```
 
+Besides paths inside vvvfs, `src` also accepts `http(s)` URLs. The file is cached into `/home/.cache/cloud/<hostname>/<pathname>` and then displayed / played from the cache:
+
+```html
+<fs-img src="https://example.com/Pictures/logo.png"></fs-img>
+<fs-video src="https://example.com/Videos/demo.mp4" width="320"></fs-video>
+```
+
+- **Cache first**: when a cache entry exists it is displayed immediately, then a HEAD request validates the remote file size; if the size differs, the HEAD response has no Content-Type, or the cache cannot be displayed, the file is downloaded again and the element refreshes
+- **Multi-threaded download**: downloads run in 4 parallel Range-based chunks by default (configurable via `vvvfs.downloadFile(url, path, { threads })`, 1-8); it falls back to a single thread when the file is too small, the server ignores Range, or a chunk fails
+- `vvvfs.head(url)` returns the remote `Content-Length` / `Content-Type` on its own for custom validation
+- Downloads use `fetch`, so the target server must allow cross-origin requests (CORS)
+- Cloud files support `watch` as well; the local cache path is what gets watched
+
 Attributes shared by all three:
 
-- `src` / `path`: path of the file inside vvvfs (`src` takes precedence)
+- `src` / `path`: media path (`src` takes precedence), either inside vvvfs or an `http(s)` URL
 - `dbname`: database name, defaults to `vvvfs`; when omitted and a global `vvvfs` instance exists, that instance is used directly
 - `watch`: `true` enables file watching and `false` disables it; when enabled, the media is refreshed automatically after the file content changes (a missing or empty value is treated as `true`, for compatibility with `<fs-img watch>`)
 
@@ -382,13 +418,19 @@ Element-specific attributes:
 - `<fs-audio>`: `autoplay` / `loop` / `muted` / `preload` are passed through to the inner `<audio>` element; `controls` is enabled by default and can be turned off by removing the attribute
 - `<fs-video>`: `autoplay` / `loop` / `muted` / `preload` / `width` / `height` are passed through to the inner `<video>` element; `controls` is enabled by default and can be turned off by removing the attribute
 
-Events: `load` (media loaded) and `error` (loading failed); `detail` contains `path` plus `file` (or `message`). A `data-state` attribute (`loading` / `loaded` / `error`) is also written to the element for CSS customization.
+Events: `load` (media loaded) and `error` (loading failed); `detail` contains `path` plus `file` (or `message`), where `path` is the actual vvvfs path of the media file (the local cache path for cloud files). A `data-state` attribute (`loading` / `loaded` / `error`) is also written to the element for CSS customization.
 
 A `data` property (JS property) is also available, returning the Blob object of the current media file (`null` before loading or after a failure), which is useful for uploading or further processing.
 
 Rendering happens inside a Shadow DOM: the media element is exposed as `part="img"` / `part="audio"` / `part="video"`, so it can be styled with `fs-img::part(img) { ... }` and friends; the default slot content is shown when loading fails or no path is set (e.g. `<fs-audio src="/a.mp3">failed</fs-audio>`).
 
 ## Changelog
+
+### 0.2.4
+- The `src` attribute of `<fs-img>` / `<fs-audio>` / `<fs-video>` now accepts `http(s)` URLs: the file is cached into `/home/.cache/cloud/<hostname>/<pathname>` and then displayed / played
+- Cloud files are now **cache-first**: the existing cache is shown immediately, then a HEAD request validates the remote file size; a size mismatch, a missing Content-Type, or an undisplayable cache triggers a fresh download and refresh
+- `downloadFile` supports multi-threaded downloads (4 threads by default, configurable via `threads`, 1-8, using parallel Range chunks); it falls back to a single thread when the file is too small, the server ignores Range, or a chunk fails
+- Added `vvvfs.head(url)`, returning the remote `Content-Length` / `Content-Type` / `acceptRanges`
 
 ### 0.2.3
 

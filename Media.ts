@@ -1,11 +1,13 @@
 /**
  * @file Media.ts
- * @description 定义自定义 HTML 元素 <fs-audio> 与 <fs-video>，可直接播放存储在 vvvfs 中的音频 / 视频文件。
- * 同时导出 <fs-img> / <fs-audio> / <fs-video> 共用的抽象基类 FsMedia。
+ * @description 定义 <fs-img> / <fs-audio> / <fs-video> 共用的媒体元素基类 FsMedia，
+ * 以及 <fs-audio> 与 <fs-video>；可直接显示 / 播放存储在 vvvfs 中的媒体文件。
+ * src 为 http(s) 地址时，会先下载到 /home/.cache/cloud/<hostname>/<pathname> 再展示。
  * @author IFTC
  * @example
+ * <fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
  * <fs-audio src="/home/user/Music/demo.mp3"></fs-audio>
- * <fs-video src="/home/user/Videos/demo.mp4" width="320"></fs-video>
+ * <fs-video src="https://example.com/video/demo.mp4" width="320"></fs-video>
  */
 import type { VVVFS, VVVFSOptions } from "./index";
 
@@ -31,6 +33,41 @@ const OBSERVED_ATTRIBUTES = [
  * 默认数据库名
  */
 const DEFAULT_DB_NAME = "vvvfs";
+
+/**
+ * 云端文件缓存根目录
+ */
+const CLOUD_CACHE_ROOT = "/home/.cache/cloud";
+
+/**
+ * 判断是否为云端地址（http / https / 协议相对 URL）
+ * @param src 路径字符串
+ */
+function isRemoteUrl(src: string): boolean {
+    return /^(https?:\/\/|\/\/)/i.test(src.trim());
+}
+
+/**
+ * 计算云端文件在 vvvfs 中的缓存路径
+ * @description /home/.cache/cloud/<hostname>/<pathname>
+ * @param src 云端地址
+ */
+function cloudCachePath(src: string): string {
+    const base =
+        typeof globalThis.location?.href === "string"
+            ? globalThis.location.href
+            : "http://localhost/";
+    const url = new URL(src, base);
+    let pathname = url.pathname;
+    try {
+        pathname = decodeURIComponent(pathname);
+    } catch {
+        // 保留原始路径（百分号编码非法时）
+    }
+    // 去掉首尾多余的斜杠，避免拼接出重复分隔符
+    pathname = pathname.replace(/^\/+|\/+$/g, "");
+    return `${CLOUD_CACHE_ROOT}/${url.hostname}/${pathname}`;
+}
 
 /**
  * 会改变文件内容的操作类型（其余操作不会触发刷新）
@@ -180,8 +217,8 @@ export interface FsMediaErrorDetail {
 
 /**
  * 媒体元素基类
- * @description <fs-img> / <fs-audio> / <fs-video> 共用，封装文件读取、ObjectURL、
- * watch 自动刷新、Shadow DOM 渲染与 load / error 事件。
+ * @description <fs-img> / <fs-audio> / <fs-video> 共用，封装文件读取、云端下载与缓存、
+ * ObjectURL、watch 自动刷新、Shadow DOM 渲染与 load / error 事件。
  */
 export abstract class FsMedia extends HTMLElement {
     /**
@@ -372,11 +409,19 @@ export abstract class FsMedia extends HTMLElement {
      * 以避开 vvvfs watch 在操作提交前触发导致的旧内容问题。
      */
     scheduleWatchRefresh(): void {
-        if (this.#watchTimer !== null || !this.isConnected || !this.watch) return;
+        // 自身下载 / 读取触发的 watch 不递归刷新
+        if (
+            this.#skipWatch ||
+            this.#watchTimer !== null ||
+            !this.isConnected ||
+            !this.watch
+        ) {
+            return;
+        }
         let attempts = 0;
         const tick = async () => {
             this.#watchTimer = null;
-            if (!this.isConnected || !this.watch) return;
+            if (this.#skipWatch || !this.isConnected || !this.watch) return;
             const changed = await this.#refreshForWatch();
             attempts++;
             if (!changed && attempts < WATCH_MAX_ATTEMPTS) {
@@ -384,6 +429,15 @@ export abstract class FsMedia extends HTMLElement {
             }
         };
         this.#watchTimer = window.setTimeout(tick, WATCH_RETRY_DELAY);
+    }
+
+    /**
+     * 当前生效的 vvvfs 路径
+     * @description 云端地址会被解析为本地缓存路径；其余情况与 src 一致
+     */
+    #targetPath(): string {
+        const src = this.src;
+        return isRemoteUrl(src) ? cloudCachePath(src) : src;
     }
 
     /**
@@ -405,10 +459,21 @@ export abstract class FsMedia extends HTMLElement {
         if (!fs) return false;
         this.#syncWatch(fs);
 
+        const remote = isRemoteUrl(src);
+        const targetPath = remote ? cloudCachePath(src) : src;
+
         let file: File | null = null;
+        let displayed = false;
         this.#skipWatch = true;
         try {
-            file = await fs.read(src);
+            if (remote) {
+                // 云端文件：缓存优先展示，再通过 HEAD 校验远端大小，必要时重新下载
+                const result = await this.#loadRemote(fs, targetPath, token);
+                file = result.file;
+                displayed = result.displayed;
+            } else {
+                file = await fs.read(src);
+            }
         } catch (error) {
             if (token === this.#token && this.isConnected) {
                 this.#fail(error instanceof Error ? error.message : String(error));
@@ -421,11 +486,48 @@ export abstract class FsMedia extends HTMLElement {
         if (token !== this.#token || !this.isConnected) return false;
 
         if (!file) {
-            this.#fail(`文件不存在: ${src}`);
+            this.#fail(`文件不存在: ${targetPath}`);
             return false;
         }
 
-        return this.#display(file);
+        return displayed ? true : this.#display(file, remote);
+    }
+
+    /**
+     * 加载远端文件
+     * @description 缓存优先：已有缓存时先展示缓存，再发送 HEAD 校验远端文件大小；
+     * 大小不一致、缺少 Content-Type 或缓存不可显示时重新下载
+     * @param fs VVVFS 实例
+     * @param targetPath 缓存路径
+     * @param token 加载令牌
+     * @returns 最终文件，以及是否已经展示过缓存
+     */
+    async #loadRemote(
+        fs: VVVFS,
+        targetPath: string,
+        token: number,
+    ): Promise<{ file: File | null; displayed: boolean }> {
+        const cached = (await fs.exists(targetPath)) ? await fs.read(targetPath) : null;
+        if (cached) {
+            // 缓存优先展示
+            if (token === this.#token && this.isConnected && this.#display(cached, true)) {
+                // HEAD 校验远端文件大小与类型
+                const info = await fs.head(this.src);
+                if (
+                    info.contentType != null &&
+                    info.contentLength != null &&
+                    info.contentLength === cached.size
+                ) {
+                    // 缓存有效，无需重新下载
+                    return { file: cached, displayed: true };
+                }
+            }
+        }
+        if (!(await fs.downloadFile(this.src, targetPath))) {
+            throw new Error(`下载失败: ${this.src}`);
+        }
+        const file = await fs.read(targetPath);
+        return { file, displayed: false };
     }
 
     /**
@@ -433,15 +535,15 @@ export abstract class FsMedia extends HTMLElement {
      * @returns 内容是否发生变化（或无需比较）
      */
     async #refreshForWatch(): Promise<boolean> {
-        const src = this.src;
-        if (!src) return true;
+        const targetPath = this.#targetPath();
+        if (!targetPath) return true;
         const fs = this.#fs ?? this.#resolveFS();
         if (!fs) return true;
 
         let file: File | null = null;
         this.#skipWatch = true;
         try {
-            file = await fs.read(src);
+            file = await fs.read(targetPath);
         } catch {
             return true;
         } finally {
@@ -452,11 +554,11 @@ export abstract class FsMedia extends HTMLElement {
         if (this.#isSameFile(file, this.#currentFile)) return false;
 
         if (!file) {
-            this.#fail(`文件不存在: ${src}`);
+            this.#fail(`文件不存在: ${targetPath}`);
             return true;
         }
         // 无论是否为对应类型的媒体，内容已变化，处理完毕即停止重试
-        this.#display(file);
+        this.#display(file, isRemoteUrl(this.src));
         return true;
     }
 
@@ -507,11 +609,16 @@ export abstract class FsMedia extends HTMLElement {
     /**
      * 展示文件
      * @param file 媒体文件
+     * @param allowUnknownType 是否允许未知类型（application/octet-stream，交由浏览器按内容嗅探）
      * @returns 是否成功展示
      */
-    #display(file: File): boolean {
-        if (file.type && !file.type.startsWith(this.acceptPrefix)) {
-            this.#fail(`文件不是${this.mediaLabel}: ${this.src}（${file.type}）`);
+    #display(file: File, allowUnknownType = false): boolean {
+        const typeMatched = !file.type || file.type.startsWith(this.acceptPrefix);
+        // 云端文件的 MIME 由缓存路径扩展名推断，扩展名缺失时为 application/octet-stream
+        const unknownAllowed =
+            allowUnknownType && file.type === "application/octet-stream";
+        if (!typeMatched && !unknownAllowed) {
+            this.#fail(`文件不是${this.mediaLabel}: ${this.#targetPath()}（${file.type}）`);
             return false;
         }
         const media = this.#ensureMedia();
@@ -534,7 +641,7 @@ export abstract class FsMedia extends HTMLElement {
         this.#setState("error");
         this.dispatchEvent(
             new CustomEvent<FsMediaErrorDetail>("error", {
-                detail: { path: this.src, message },
+                detail: { path: this.#targetPath(), message },
             }),
         );
     }
@@ -570,7 +677,7 @@ export abstract class FsMedia extends HTMLElement {
                 this.#setState("loaded");
                 this.dispatchEvent(
                     new CustomEvent<FsMediaLoadDetail>("load", {
-                        detail: { path: this.src, file: this.#currentFile },
+                        detail: { path: this.#targetPath(), file: this.#currentFile },
                     }),
                 );
             });
@@ -580,7 +687,7 @@ export abstract class FsMedia extends HTMLElement {
                 this.#setState("error");
                 this.dispatchEvent(
                     new CustomEvent<FsMediaErrorDetail>("error", {
-                        detail: { path: this.src, message: "媒体加载失败" },
+                        detail: { path: this.#targetPath(), message: "媒体加载失败" },
                     }),
                 );
             });
@@ -614,7 +721,7 @@ export abstract class FsMedia extends HTMLElement {
      */
     #syncWatch(fs?: VVVFS | null): void {
         const dbname = this.dbname;
-        const path = this.src;
+        const path = this.#targetPath();
         const watching = this.watch && path.length > 0;
 
         // 目标未变化时无需处理

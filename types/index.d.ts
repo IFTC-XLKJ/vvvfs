@@ -72,6 +72,8 @@ export interface VVVFSOptions {
  * @param onProgress 下载进度事件
  * @param onError 下载出错事件
  * @param onSuccess 下载成功事件
+ * @param threads 多线程下载的线程数（1-8，默认 4）；小于等于 1 时强制单线程，服务器不支持 Range 时自动回退单线程
+ * @param minChunkSize 多线程下载的最小分片大小（字节，默认 256KB）；文件小于 threads * minChunkSize 时使用单线程
  */
 export interface VVVFSDownloadOptions {
     headers?: Record<string, string>;
@@ -79,6 +81,26 @@ export interface VVVFSDownloadOptions {
     onProgress?: (progress: number) => void;
     onError?: (error: any) => void;
     onSuccess?: (success: boolean) => void;
+    threads?: number;
+    minChunkSize?: number;
+}
+
+/**
+ * 远端文件 HEAD 信息
+ */
+export interface VVVFSHeadResult {
+    /**
+     * 远端文件大小（字节），无法获取时为 null
+     */
+    contentLength: number | null;
+    /**
+     * 远端 Content-Type，无法获取时为 null
+     */
+    contentType: string | null;
+    /**
+     * 服务器是否声明支持 Range 请求（跨域时可能读取不到该响应头）
+     */
+    acceptRanges: boolean;
 }
 
 /**
@@ -589,6 +611,16 @@ export class VVVFS {
      */
     saveFile(path: string, name?: string): Promise<boolean>;
     /**
+     * 获取远端文件信息（HEAD 请求）
+     * @param url 文件链接
+     * @param options 请求配置项
+     * @description 用于下载前校验缓存、判断能否多线程下载；请求失败时返回各字段为 null / false 的默认值
+     */
+    head(
+        url: string | URL | Request,
+        options?: VVVFSDownloadOptions,
+    ): Promise<VVVFSHeadResult>;
+    /**
      * 下载文件
      * @param url 文件链接
      * @param path 保存路径
@@ -613,7 +645,7 @@ export class VVVFS {
  */
 export interface FsMediaLoadDetail {
     /**
-     * 媒体文件路径
+     * 媒体文件在 vvvfs 中的实际路径（云端文件为本地缓存路径）
      */
     path: string;
     /**
@@ -638,12 +670,12 @@ export interface FsMediaErrorDetail {
 
 /**
  * 自定义图片元素 <fs-img>
- * @description 直接读取并显示存储在 vvvfs 中的图片文件
+ * @description 直接显示 vvvfs 中的图片文件；src 为 http(s) 云端地址时，先下载到 /home/.cache/cloud/<hostname>/<pathname> 再显示
  * @attributes
- * - src / path：图片在 vvvfs 中的路径（src 优先，其次 path）
+ * - src / path：图片路径（src 优先，其次 path），支持 http(s) 云端地址
  * - dbname：数据库名，默认 "vvvfs"；未指定且存在全局 vvvfs 实例时直接使用该实例
  * - alt / width / height：透传到内部 <img> 元素
- * - watch：存在时，文件发生变化自动刷新
+ * - watch：true 启用文件监听，false 停止监听
  * @events
  * - load：图片加载完成（detail: { path, file }）
  * - error：图片加载失败（detail: { path, message }）
@@ -687,13 +719,13 @@ export class FsImg extends HTMLElement {
 
 /**
  * 自定义音频元素 <fs-audio>
- * @description 直接读取并播放存储在 vvvfs 中的音频文件
+ * @description 直接播放 vvvfs 中的音频文件；src 为 http(s) 云端地址时，先下载到 /home/.cache/cloud/<hostname>/<pathname> 再播放
  * @attributes
- * - src / path：音频在 vvvfs 中的路径（src 优先，其次 path）
+ * - src / path：音频路径（src 优先，其次 path），支持 http(s) 云端地址
  * - dbname：数据库名，默认 "vvvfs"；未指定且存在全局 vvvfs 实例时直接使用该实例
  * - controls：是否显示控制条（默认显示）
  * - autoplay / loop / muted / preload：透传到内部 <audio> 元素
- * - watch：存在时，文件发生变化自动刷新
+ * - watch：true 启用文件监听，false 停止监听
  * @events
  * - load：音频数据加载完成（detail: { path, file }）
  * - error：音频加载失败（detail: { path, message }）
@@ -737,13 +769,13 @@ export class FsAudio extends HTMLElement {
 
 /**
  * 自定义视频元素 <fs-video>
- * @description 直接读取并播放存储在 vvvfs 中的视频文件
+ * @description 直接播放 vvvfs 中的视频文件；src 为 http(s) 云端地址时，先下载到 /home/.cache/cloud/<hostname>/<pathname> 再播放
  * @attributes
- * - src / path：视频在 vvvfs 中的路径（src 优先，其次 path）
+ * - src / path：视频路径（src 优先，其次 path），支持 http(s) 云端地址
  * - dbname：数据库名，默认 "vvvfs"；未指定且存在全局 vvvfs 实例时直接使用该实例
  * - controls：是否显示控制条（默认显示）
  * - autoplay / loop / muted / preload / width / height：透传到内部 <video> 元素
- * - watch：存在时，文件发生变化自动刷新
+ * - watch：true 启用文件监听，false 停止监听
  * @events
  * - load：视频数据加载完成（detail: { path, file }）
  * - error：视频加载失败（detail: { path, message }）

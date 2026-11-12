@@ -68,7 +68,50 @@ export interface VVVFSDownloadOptions {
     onProgress?: (progress: number) => void;
     onError?: (error: any) => void;
     onSuccess?: (success: boolean) => void;
+    /**
+     * 多线程下载的线程数（1-8，默认 4）
+     * @description 小于等于 1 时强制单线程下载；服务器不支持 Range 请求时自动回退单线程
+     */
+    threads?: number;
+    /**
+     * 多线程下载的最小分片大小（字节，默认 256KB）
+     * @description 文件小于 threads * minChunkSize 时使用单线程下载
+     */
+    minChunkSize?: number;
 }
+
+/**
+ * 远端文件 HEAD 信息
+ */
+export interface VVVFSHeadResult {
+    /**
+     * 远端文件大小（字节），无法获取时为 null
+     */
+    contentLength: number | null;
+    /**
+     * 远端 Content-Type，无法获取时为 null
+     */
+    contentType: string | null;
+    /**
+     * 服务器是否声明支持 Range 请求（跨域时可能读取不到该响应头）
+     */
+    acceptRanges: boolean;
+}
+
+/**
+ * 默认下载线程数
+ */
+const DEFAULT_DOWNLOAD_THREADS = 4;
+
+/**
+ * 最大下载线程数
+ */
+const MAX_DOWNLOAD_THREADS = 8;
+
+/**
+ * 多线程下载的最小分片大小（字节）
+ */
+const MIN_DOWNLOAD_CHUNK_SIZE = 256 * 1024;
 
 /**
  * 虚拟文件系统错误类
@@ -1428,6 +1471,44 @@ class VVVFS {
         }, false);
     }
     /**
+     * 获取远端文件信息（HEAD 请求）
+     * @param url 文件链接
+     * @param options 请求配置项
+     * @description 用于下载前校验缓存、判断能否多线程下载；请求失败时返回各字段为 null / false 的默认值
+     */
+    async head(
+        url: string | URL | Request,
+        options: VVVFSDownloadOptions = {},
+    ): Promise<VVVFSHeadResult> {
+        return this.#withErrorHandling(
+            "head",
+            async () => {
+                const headers = url instanceof Request ? url.headers : options.headers;
+                const request = new Request(url instanceof Request ? url.url : url, {
+                    method: "HEAD",
+                    headers,
+                });
+                const response = await fetch(request);
+                if (!response.ok) {
+                    throw new Error(`HEAD 失败，HTTP ${response.status}`);
+                }
+                const length = response.headers.get("Content-Length");
+                return {
+                    contentLength:
+                        length != null && /^\d+$/.test(length.trim())
+                            ? Number(length)
+                            : null,
+                    contentType: response.headers.get("Content-Type"),
+                    acceptRanges: (response.headers.get("Accept-Ranges") || "")
+                        .toLowerCase()
+                        .includes("bytes"),
+                };
+            },
+            { contentLength: null, contentType: null, acceptRanges: false },
+        );
+    }
+
+    /**
      * 下载文件
      * @param url 文件链接
      * @param path 保存路径
@@ -1441,10 +1522,27 @@ class VVVFS {
         return this.#withErrorHandling("downloadFile", async () => {
             const targetPath = joinPath(path);
             if (!(await this.#checkAccess(targetPath, "write"))) return false;
-            const content =
-                (options.mode || "fetch") === "xhr"
-                    ? await this.#downloadWithXHR(url, options)
-                    : await this.#downloadWithFetch(url, options);
+
+            // 多线程下载需要预先知道文件大小，先发送 HEAD 请求；单线程模式无需 HEAD
+            const wantMultiThread =
+                Math.floor(options.threads ?? DEFAULT_DOWNLOAD_THREADS) > 1;
+            const info = wantMultiThread ? await this.head(url, options) : null;
+
+            let content: Blob | null = null;
+            if (info?.contentLength && info.contentLength > 0) {
+                content = await this.#downloadWithThreads(
+                    url,
+                    info.contentLength,
+                    options,
+                );
+            }
+            // 不支持多线程（文件过小 / 服务器不支持 Range / 分片失败）时回退单线程
+            if (!content) {
+                content =
+                    (options.mode || "fetch") === "xhr"
+                        ? await this.#downloadWithXHR(url, options)
+                        : await this.#downloadWithFetch(url, options);
+            }
             if (!content) return false;
             const blob = new Blob([content], {
                 type: mime.getType(targetPath) || "application/octet-stream",
@@ -1455,6 +1553,84 @@ class VVVFS {
             }
             return success;
         }, false);
+    }
+
+    /**
+     * 使用多线程（Range 分片）下载文件
+     * @param url 文件链接
+     * @param total 文件总大小（字节）
+     * @param options 下载配置项
+     * @returns 下载成功的 Blob；不支持多线程或任一分片失败时返回 null，由调用方回退单线程
+     */
+    async #downloadWithThreads(
+        url: string | URL | Request,
+        total: number,
+        options: VVVFSDownloadOptions,
+    ): Promise<Blob | null> {
+        const threads = Math.min(
+            MAX_DOWNLOAD_THREADS,
+            Math.max(1, Math.floor(options.threads ?? DEFAULT_DOWNLOAD_THREADS)),
+        );
+        const minChunkSize = Math.max(
+            1,
+            Math.floor(options.minChunkSize ?? MIN_DOWNLOAD_CHUNK_SIZE),
+        );
+        // 文件过小或线程数不足时无需分片
+        if (threads <= 1 || total <= 0 || total < threads * minChunkSize) return null;
+
+        const ranges: Array<[number, number]> = [];
+        const baseSize = Math.floor(total / threads);
+        let start = 0;
+        for (let i = 0; i < threads; i++) {
+            const end = i === threads - 1 ? total - 1 : start + baseSize - 1;
+            ranges.push([start, end]);
+            start = end + 1;
+        }
+
+        const request =
+            url instanceof Request ? url : new Request(url, { headers: options.headers });
+        const controller = new AbortController();
+        const chunks: (Uint8Array | null)[] = new Array(ranges.length).fill(null);
+        let loaded = 0;
+
+        const tasks = ranges.map(async ([rangeStart, rangeEnd], index) => {
+            try {
+                const headers = new Headers(request.headers);
+                headers.set("Range", `bytes=${rangeStart}-${rangeEnd}`);
+                const response = await fetch(request, {
+                    headers,
+                    signal: controller.signal,
+                });
+                // 服务器忽略 Range 返回 200，说明不支持多线程下载
+                if (response.status !== 206) {
+                    throw new Error(
+                        `服务器不支持 Range 请求，HTTP ${response.status}`,
+                    );
+                }
+                const buffer = await response.arrayBuffer();
+                chunks[index] = new Uint8Array(buffer);
+                loaded += buffer.byteLength;
+                if (options.onProgress) {
+                    options.onProgress(Math.min(100, Math.round((loaded / total) * 100)));
+                }
+            } catch (error) {
+                // 任一分片失败即中止其余分片，回退单线程
+                controller.abort();
+                throw error;
+            }
+        });
+
+        try {
+            await Promise.all(tasks);
+        } catch {
+            // 静默回退单线程；若单线程也失败，由单线程逻辑上报错误
+            return null;
+        }
+
+        if (chunks.some((chunk) => chunk === null)) return null;
+        const received = chunks.reduce((sum, chunk) => sum + (chunk?.length ?? 0), 0);
+        if (received !== total) return null;
+        return new Blob(chunks as BlobPart[]);
     }
     /**
      * 使用fetch下载文件
