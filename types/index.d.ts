@@ -609,25 +609,25 @@ export class VVVFS {
 }
 
 /**
- * <fs-img> 元素 load 事件详情
+ * <fs-img> / <fs-audio> / <fs-video> 元素 load 事件详情
  */
-export interface FsImgLoadDetail {
+export interface FsMediaLoadDetail {
     /**
-     * 图片路径
+     * 媒体文件路径
      */
     path: string;
     /**
-     * 图片文件对象
+     * 媒体文件对象
      */
     file: File | null;
 }
 
 /**
- * <fs-img> 元素 error 事件详情
+ * <fs-img> / <fs-audio> / <fs-video> 元素 error 事件详情
  */
-export interface FsImgErrorDetail {
+export interface FsMediaErrorDetail {
     /**
-     * 图片路径
+     * 媒体文件路径
      */
     path: string;
     /**
@@ -667,7 +667,115 @@ export class FsImg extends HTMLElement {
      */
     dbname: string;
     /**
+     * 是否监听文件变化（true 启用，false 停止）
+     */
+    watch: boolean;
+    /**
+     * 当前显示的图片文件对象（未加载或加载失败时为 null）
+     */
+    readonly data: Blob | null;
+    /**
      * 手动刷新（重新读取并显示图片）
+     */
+    refresh(): Promise<boolean>;
+    /**
+     * 调度一次 watch 触发的刷新（内部使用）
+     * @internal
+     */
+    scheduleWatchRefresh(): void;
+}
+
+/**
+ * 自定义音频元素 <fs-audio>
+ * @description 直接读取并播放存储在 vvvfs 中的音频文件
+ * @attributes
+ * - src / path：音频在 vvvfs 中的路径（src 优先，其次 path）
+ * - dbname：数据库名，默认 "vvvfs"；未指定且存在全局 vvvfs 实例时直接使用该实例
+ * - controls：是否显示控制条（默认显示）
+ * - autoplay / loop / muted / preload：透传到内部 <audio> 元素
+ * - watch：存在时，文件发生变化自动刷新
+ * @events
+ * - load：音频数据加载完成（detail: { path, file }）
+ * - error：音频加载失败（detail: { path, message }）
+ * @example <fs-audio src="/home/user/Music/demo.mp3"></fs-audio>
+ */
+export class FsAudio extends HTMLElement {
+    /**
+     * 监听的属性列表
+     */
+    static get observedAttributes(): string[];
+    /**
+     * 构造函数
+     */
+    constructor();
+    /**
+     * 音频路径（src 优先，其次 path）
+     */
+    src: string;
+    /**
+     * 数据库名
+     */
+    dbname: string;
+    /**
+     * 是否监听文件变化（true 启用，false 停止）
+     */
+    watch: boolean;
+    /**
+     * 当前显示的音频文件对象（未加载或加载失败时为 null）
+     */
+    readonly data: Blob | null;
+    /**
+     * 手动刷新（重新读取并显示音频）
+     */
+    refresh(): Promise<boolean>;
+    /**
+     * 调度一次 watch 触发的刷新（内部使用）
+     * @internal
+     */
+    scheduleWatchRefresh(): void;
+}
+
+/**
+ * 自定义视频元素 <fs-video>
+ * @description 直接读取并播放存储在 vvvfs 中的视频文件
+ * @attributes
+ * - src / path：视频在 vvvfs 中的路径（src 优先，其次 path）
+ * - dbname：数据库名，默认 "vvvfs"；未指定且存在全局 vvvfs 实例时直接使用该实例
+ * - controls：是否显示控制条（默认显示）
+ * - autoplay / loop / muted / preload / width / height：透传到内部 <video> 元素
+ * - watch：存在时，文件发生变化自动刷新
+ * @events
+ * - load：视频数据加载完成（detail: { path, file }）
+ * - error：视频加载失败（detail: { path, message }）
+ * @example <fs-video src="/home/user/Videos/demo.mp4" width="320"></fs-video>
+ */
+export class FsVideo extends HTMLElement {
+    /**
+     * 监听的属性列表
+     */
+    static get observedAttributes(): string[];
+    /**
+     * 构造函数
+     */
+    constructor();
+    /**
+     * 视频路径（src 优先，其次 path）
+     */
+    src: string;
+    /**
+     * 数据库名
+     */
+    dbname: string;
+    /**
+     * 是否监听文件变化（true 启用，false 停止）
+     */
+    watch: boolean;
+    /**
+     * 当前显示的视频文件对象（未加载或加载失败时为 null）
+     */
+    readonly data: Blob | null;
+    /**
+     * 手动刷新（重新读取并显示视频）
      */
     refresh(): Promise<boolean>;
     /**

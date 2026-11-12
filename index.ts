@@ -4,8 +4,9 @@ import { Mime } from "mime";
 import standardTypes from "mime/types/standard.js";
 import otherTypes from "mime/types/other.js";
 
-// 自定义元素 <fs-img>（直接显示 vvvfs 中的图片文件）
+// 自定义元素 <fs-img> / <fs-audio> / <fs-video>（直接显示 / 播放 vvvfs 中的媒体文件）
 export { FsImg } from "./Img";
+export { FsAudio, FsVideo } from "./Media";
 
 const mime = new Mime(standardTypes, otherTypes);
 

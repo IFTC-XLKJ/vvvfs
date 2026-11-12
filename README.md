@@ -102,12 +102,14 @@ const vvvfs = new VVVFS("vvvfs", {
 // 用法与 vvvfs 相当
 ```
 
-### 使用 `<fs-img>` 自定义元素
+### 使用 `<fs-img>` / `<fs-audio>` / `<fs-video>` 自定义元素
 
-库加载后会自动注册 `<fs-img>` 元素，可直接显示 vvvfs 中的图片文件：
+库加载后会自动注册这三个元素，可直接显示 / 播放 vvvfs 中的媒体文件：
 
 ```html
 <fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
+<fs-audio src="/home/user/Music/demo.mp3"></fs-audio>
+<fs-video src="/home/user/Videos/demo.mp4" width="320"></fs-video>
 ```
 
 ```javascript
@@ -117,18 +119,32 @@ img.src = "/home/user/Pictures/logo.png";
 document.body.appendChild(img);
 ```
 
-属性：
+三者共有的属性：
 
-- `src` / `path`：图片在 vvvfs 中的路径（`src` 优先）
+- `src` / `path`：文件在 vvvfs 中的路径（`src` 优先）
 - `dbname`：数据库名，默认 `vvvfs`；未指定且存在全局 `vvvfs` 实例时直接使用该实例
-- `alt` / `width` / `height`：透传到内部 `<img>` 元素
-- `watch`：存在时，文件内容发生变化后自动刷新
+- `watch`：`true` 时启用文件监听，`false` 时停止监听；启用后文件内容发生变化会自动刷新（缺省或空值视为 `true`，兼容 `<fs-img watch>` 的写法）
+
+各自的属性：
+
+- `<fs-img>`：`alt` / `width` / `height` 透传到内部 `<img>` 元素
+- `<fs-audio>`：`autoplay` / `loop` / `muted` / `preload` 透传到内部 `<audio>` 元素；`controls` 默认开启，移除该属性即可关闭
+- `<fs-video>`：`autoplay` / `loop` / `muted` / `preload` / `width` / `height` 透传到内部 `<video>` 元素；`controls` 默认开启，移除该属性即可关闭
 
 事件：`load`（加载完成）、`error`（加载失败），`detail` 中包含 `path` 与 `file`（或 `message`）。元素上还会写入 `data-state` 属性（`loading` / `loaded` / `error`），便于 CSS 定制。
 
-内部使用 Shadow DOM 渲染：图片暴露为 `part="img"`，可用 `fs-img::part(img) { ... }` 定制样式；默认插槽内容会在加载失败或未设置路径时显示（如 `<fs-img src="/a.png">加载失败</fs-img>`）。
+此外提供 `data` 属性（JS 属性），返回当前媒体文件的 Blob 对象（未加载或加载失败时为 `null`），可用于上传、二次处理等场景。
+
+内部使用 Shadow DOM 渲染：媒体元素分别暴露为 `part="img"` / `part="audio"` / `part="video"`，可用 `fs-img::part(img) { ... }` 等定制样式；默认插槽内容会在加载失败或未设置路径时显示（如 `<fs-audio src="/a.mp3">加载失败</fs-audio>`）。
 
 ## 更新日志
+
+### 0.2.3
+
+- 新增 `<fs-audio>` 自定义元素，可直接播放 vvvfs 中的音频文件
+- 新增 `<fs-video>` 自定义元素，可直接播放 vvvfs 中的视频文件
+- `<fs-img>` / `<fs-audio>` / `<fs-video>` 新增 `data` 属性，返回当前媒体文件的 Blob 对象（未加载时为 `null`）
+- `<fs-img>` / `<fs-audio>` / `<fs-video>` 的 `watch` 属性支持 `true` / `false`，为 `false` 时停止文件监听
 
 ### 0.2.2
 
@@ -337,33 +353,49 @@ Using the `VVVFS.File` class:
 // The usage is equivalent to vvvfs
 ```
 
-### Using the `<fs-img>` Custom Element
+### Using the `<fs-img>` / `<fs-audio>` / `<fs-video>` Custom Elements
 
-Once the library is loaded, the `<fs-img>` element is registered automatically and can display image files stored in vvvfs directly:
+Once the library is loaded, these three elements are registered automatically and can display / play media files stored in vvvfs directly:
 
 ```html
 <fs-img src="/home/user/Pictures/logo.png" alt="Logo" width="120"></fs-img>
+<fs-audio src="/home/user/Music/demo.mp3"></fs-audio>
+<fs-video src="/home/user/Videos/demo.mp4" width="320"></fs-video>
 ```
 
 ```javascript
-// It can also be created dynamically
+// They can also be created dynamically
 const img = document.createElement("fs-img");
 img.src = "/home/user/Pictures/logo.png";
 document.body.appendChild(img);
 ```
 
-Attributes:
+Attributes shared by all three:
 
-- `src` / `path`: path of the image inside vvvfs (`src` takes precedence)
+- `src` / `path`: path of the file inside vvvfs (`src` takes precedence)
 - `dbname`: database name, defaults to `vvvfs`; when omitted and a global `vvvfs` instance exists, that instance is used directly
-- `alt` / `width` / `height`: passed through to the inner `<img>` element
-- `watch`: when present, the image is refreshed automatically after the file content changes
+- `watch`: `true` enables file watching and `false` disables it; when enabled, the media is refreshed automatically after the file content changes (a missing or empty value is treated as `true`, for compatibility with `<fs-img watch>`)
 
-Events: `load` (image loaded) and `error` (loading failed); `detail` contains `path` plus `file` (or `message`). A `data-state` attribute (`loading` / `loaded` / `error`) is also written to the element for CSS customization.
+Element-specific attributes:
 
-Rendering happens inside a Shadow DOM: the image is exposed as `part="img"`, so it can be styled with `fs-img::part(img) { ... }`; the default slot content is shown when loading fails or no path is set (e.g. `<fs-img src="/a.png">failed</fs-img>`).
+- `<fs-img>`: `alt` / `width` / `height` are passed through to the inner `<img>` element
+- `<fs-audio>`: `autoplay` / `loop` / `muted` / `preload` are passed through to the inner `<audio>` element; `controls` is enabled by default and can be turned off by removing the attribute
+- `<fs-video>`: `autoplay` / `loop` / `muted` / `preload` / `width` / `height` are passed through to the inner `<video>` element; `controls` is enabled by default and can be turned off by removing the attribute
+
+Events: `load` (media loaded) and `error` (loading failed); `detail` contains `path` plus `file` (or `message`). A `data-state` attribute (`loading` / `loaded` / `error`) is also written to the element for CSS customization.
+
+A `data` property (JS property) is also available, returning the Blob object of the current media file (`null` before loading or after a failure), which is useful for uploading or further processing.
+
+Rendering happens inside a Shadow DOM: the media element is exposed as `part="img"` / `part="audio"` / `part="video"`, so it can be styled with `fs-img::part(img) { ... }` and friends; the default slot content is shown when loading fails or no path is set (e.g. `<fs-audio src="/a.mp3">failed</fs-audio>`).
 
 ## Changelog
+
+### 0.2.3
+
+- Added the `<fs-audio>` custom element to play audio files stored in vvvfs directly
+- Added the `<fs-video>` custom element to play video files stored in vvvfs directly
+- Added the `data` property to `<fs-img>` / `<fs-audio>` / `<fs-video>`, returning the Blob object of the current media file (`null` before loading)
+- The `watch` attribute of `<fs-img>` / `<fs-audio>` / `<fs-video>` now accepts `true` / `false`; `false` stops the file watching
 
 ### 0.2.2
 
