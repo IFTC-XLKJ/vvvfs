@@ -1754,49 +1754,48 @@ class VVVFS {
 /**
  * 解析路径
  * @param path 路径
+ * @returns name 文件名、parent 父目录路径
+ * @throws 文件名或路径过长时抛出 VVVFSError
  */
 function parsePath(path: string) {
-    path = joinPath(path);
-    const oldParts = path.split("/");
+    const normalized = joinPath(path);
     const parts: string[] = [];
-    for (let i = 0; i < oldParts.length; i++) {
-        if (oldParts[i].length > 255) throw new VVVFSError("ParsePath", "文件名过长");
-        if (oldParts[i]) parts.push(oldParts[i]);
+    for (const part of normalized.split("/")) {
+        if (!part) continue;
+        if (part.length > 255) throw new VVVFSError("ParsePath", "文件名过长");
+        parts.push(part);
     }
     const name = parts.pop() || "";
-    const parent = "/" + parts.join("/");
-    if (joinPath(parent, name).length > 4096) throw new VVVFSError("ParsePath", "文件路径过长");
+    const parent = parts.length > 0 ? "/" + parts.join("/") : "/";
+    if (parent.length + 1 + name.length > 4096) {
+        throw new VVVFSError("ParsePath", "文件路径过长");
+    }
     return { name, parent };
 }
 
 /**
- * 合并路径
- * @param paths 路径
+ * 合并路径（始终返回以 / 开头的绝对路径）
+ * @param paths 路径片段
  */
-function joinPath(...paths: string[]) {
-    const segments = paths.map((p) => String(p)).filter((p) => p.length > 0);
-    if (segments.length === 0) return ".";
-    const isAbsolute = segments[0].startsWith("/");
-    const parts = segments.join("/").split("/");
+function joinPath(...paths: string[]): string {
+    const joined = paths.filter((p) => p !== "").join("/");
+    if (joined === "") return "/";
+    const isAbsolute = joined.startsWith("/");
     const stack: string[] = [];
-    for (const part of parts) {
-        if (part === "" || part === ".") {
-            continue;
-        } else if (part === "..") {
+    for (const part of joined.split("/")) {
+        if (part === "" || part === ".") continue;
+        if (part === "..") {
             if (stack.length > 0 && stack[stack.length - 1] !== "..") {
                 stack.pop();
             } else if (!isAbsolute) {
                 stack.push("..");
             }
-        } else {
-            stack.push(part);
+            continue;
         }
+        stack.push(part);
     }
-    let result = stack.join("/");
-    if (isAbsolute) {
-        result = "/" + result;
-    }
-    return result.startsWith("/") ? result : "/" + result || (isAbsolute ? "/" : ".");
+    const result = (isAbsolute ? "/" : "") + stack.join("/");
+    return result || (isAbsolute ? "/" : ".");
 }
 Object.defineProperty(VVVFS, "version", {
     value: version,

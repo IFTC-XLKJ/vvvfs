@@ -154,6 +154,9 @@ document.body.appendChild(img);
 
 ## 更新日志
 
+### 0.2.5
+- 优化代码
+
 ### 0.2.4
 - `<fs-img>` / `<fs-audio>` / `<fs-video>` 的 `src` 支持 `http(s)` 云端地址：文件缓存到 `/home/.cache/cloud/<hostname>/<pathname>` 后显示 / 播放
 - 云端文件改为**缓存优先**：先展示已有缓存，再发送 HEAD 校验远端文件大小；大小不一致、HEAD 未返回 Content-Type 或缓存不可显示时自动重新下载并刷新
@@ -425,6 +428,9 @@ A `data` property (JS property) is also available, returning the Blob object of 
 Rendering happens inside a Shadow DOM: the media element is exposed as `part="img"` / `part="audio"` / `part="video"`, so it can be styled with `fs-img::part(img) { ... }` and friends; the default slot content is shown when loading fails or no path is set (e.g. `<fs-audio src="/a.mp3">failed</fs-audio>`).
 
 ## Changelog
+
+### 0.2.5
+- Optimized code
 
 ### 0.2.4
 - The `src` attribute of `<fs-img>` / `<fs-audio>` / `<fs-video>` now accepts `http(s)` URLs: the file is cached into `/home/.cache/cloud/<hostname>/<pathname>` and then displayed / played
