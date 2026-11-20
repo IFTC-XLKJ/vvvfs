@@ -154,6 +154,9 @@ document.body.appendChild(img);
 
 ## 更新日志
 
+### 0.2.6
+- 新增 `vvvfs.MFT` 只读属性，返回主文件表（文件系统中所有文件/目录的记录），类似 NTFS 的主文件表（MFT）
+
 ### 0.2.5
 - 优化代码
 
@@ -428,6 +431,9 @@ A `data` property (JS property) is also available, returning the Blob object of 
 Rendering happens inside a Shadow DOM: the media element is exposed as `part="img"` / `part="audio"` / `part="video"`, so it can be styled with `fs-img::part(img) { ... }` and friends; the default slot content is shown when loading fails or no path is set (e.g. `<fs-audio src="/a.mp3">failed</fs-audio>`).
 
 ## Changelog
+
+### 0.2.6
+- Added the read-only `vvvfs.MFT` property, returning the master file table (all file/directory records in the file system), similar to NTFS's MFT
 
 ### 0.2.5
 - Optimized code

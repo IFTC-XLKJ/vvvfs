@@ -604,6 +604,15 @@ class VVVFS {
     #db: VVVFSDatabase;
     options: VVVFSOptions;
     /**
+     * 主文件表（Master File Table）
+     * @description 只读属性，返回文件系统中所有文件/目录的记录，类似 NTFS 的主文件表（MFT）
+     */
+    get MFT(): Promise<FileRecord[]> {
+        return this.#withErrorHandling("MFT", async () => {
+            return await this.#db.files.toArray();
+        }, [] as FileRecord[]);
+    }
+    /**
      * 虚拟文件系统版本
      */
     static version: string;
@@ -739,7 +748,7 @@ class VVVFS {
             "lib", "lib64", "media", "mnt", "opt", "proc",
             "run", "sbin", "srv", "sys", "tmp", "usr", "var",
         ];
-        const linuxInitFiles = linuxDirs.map((name) => ({
+        const linuxInitFiles: FileRecord[] = linuxDirs.map((name) => ({
             name,
             path: "/",
             type: "dir" as const,

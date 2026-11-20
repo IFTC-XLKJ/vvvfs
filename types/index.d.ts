@@ -419,6 +419,12 @@ export class VVVFS {
     options: VVVFSOptions;
 
     /**
+     * 主文件表（Master File Table）
+     * @description 只读属性，返回文件系统中所有文件/目录的记录，类似 NTFS 的主文件表（MFT）
+     */
+    get MFT(): Promise<FileRecord[]>;
+
+    /**
      * 创建虚拟文件系统
      * @param name 虚拟文件系统名称
      * @param options 配置项
